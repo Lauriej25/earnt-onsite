@@ -238,6 +238,37 @@ function onCountryChange() {
   if (activeAutocomplete) initAddressAutocomplete(activeAutocomplete.inputId, activeAutocomplete.countryId, activeAutocomplete.onPlace);
 }
 
+/* Draggable pin map — lets someone place/adjust the exact site location
+   even when they aren't physically there (typing an address only gets you
+   so close; this lets you fine-tune or place a pin from memory/satellite view). */
+function initPinMap(divId, lat, lng, onMove) {
+  if (!mapsReady || !window.google || !google.maps) return null;
+  const el = $(divId); if (!el) return null;
+  const hasPos = lat != null && lng != null;
+  const center = hasPos ? {lat, lng} : {lat:54.5, lng:-3.5}; // UK-wide default view
+  const map = new google.maps.Map(el, {center, zoom: hasPos?16:5, disableDefaultUI:true, zoomControl:true, gestureHandling:'greedy'});
+  const marker = new google.maps.Marker({position:center, map, draggable:true});
+  marker.addListener('dragend', () => {
+    const p = marker.getPosition();
+    onMove({lat:+p.lat().toFixed(6), lng:+p.lng().toFixed(6)});
+  });
+  map.addListener('click', e => {
+    marker.setPosition(e.latLng);
+    onMove({lat:+e.latLng.lat().toFixed(6), lng:+e.latLng.lng().toFixed(6)});
+  });
+  return {map, marker};
+}
+function movePinMap(instance, lat, lng) {
+  if (!instance) return;
+  instance.marker.setPosition({lat,lng});
+  instance.map.panTo({lat,lng});
+  instance.map.setZoom(16);
+}
+function pinMapHTML(divId) {
+  return mapsReady ? `<div id="${divId}" style="height:200px;border-radius:10px;overflow:hidden;margin-top:10px;border:1px solid var(--line)"></div>
+    <div class="mono muted" style="font-size:.58rem;margin-top:4px">Drag the pin, or tap anywhere on the map, to fine-tune the exact spot.</div>` : '';
+}
+
 /* Demo admin passcode: earnt2026
    Demo brand "The Brown Dog" access code: BROWNDOG1
    To change either: run setPasscode('newcode') in the console and
@@ -258,6 +289,7 @@ let captureIntent = 'gallery'; // 'gallery' | 'checkin' | 'checkout'
 let pendingCheckin = null;
 let pendingCheckout = null;
 let pendingPin = null;
+let newJobMapInstance = null;
 let hostChoice = 'cause'; // 'cause' | 'self' — used on the New Job form
 
 /* ---------- data layer ---------- */
@@ -397,6 +429,29 @@ function restoreSession() {
     else if (s.role === 'brand' && s.brandId) currentBrandId = s.brandId;
   } catch (_) {}
 }
+
+/* ---------- volunteer identity persistence ----------
+   Volunteers get no account, so a closed tab shouldn't lose their place.
+   A random device ID (not tied to any personal info) is stored locally so
+   reopening a job link reconnects them to an open shift automatically. */
+function getDeviceId() {
+  let id = localStorage.getItem('earnt_device_id');
+  if (!id) { id = 'd' + Math.random().toString(36).slice(2,10) + Date.now().toString(36); localStorage.setItem('earnt_device_id', id); }
+  return id;
+}
+function restoreVolunteerName() {
+  const n = localStorage.getItem('earnt_volunteer_name');
+  if (n) volunteerName = n;
+}
+function setVolunteerName(name) {
+  volunteerName = name;
+  localStorage.setItem('earnt_volunteer_name', name);
+}
+function clearVolunteerName() {
+  volunteerName = null;
+  localStorage.removeItem('earnt_volunteer_name');
+}
+
 function toggleBrandGate() { brandGateOpen = !brandGateOpen; adminGateOpen = false; render(); }
 function generateCode(len = 8) {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = '';
@@ -406,16 +461,19 @@ function generateCode(len = 8) {
 let lastGeneratedCode = null;
 let resetCodeShown = null, resetCodeShown_value = null;
 async function createBrand() {
-  const name = $('nbName').value.trim(), contact = $('nbContact').value.trim();
+  const name = $('nbName').value.trim(), contact = $('nbContact').value.trim(), contactConfirm = $('nbContactConfirm').value.trim();
   if (!name) return toast('Give the brand a name');
-  if (contact && !isValidEmail(contact)) return toast('That doesn\'t look like a valid email address');
+  if (contact || contactConfirm) {
+    if (contact !== contactConfirm) return toast('Those two emails don\'t match');
+    if (!isValidEmail(contact)) return toast('That doesn\'t look like a valid email address');
+  }
   const code = generateCode();
   const hash = await sha256(code);
   const id = newBrandId();
   saveBrand(id, { name, contact, codeHash: hash, createdAt: Date.now() });
   lastGeneratedCode = { name, code };
   resetCodeShown = null;
-  $('nbName').value = ''; $('nbContact').value = '';
+  $('nbName').value = ''; $('nbContact').value = ''; $('nbContactConfirm').value = '';
   render();
 }
 async function resetBrandCode(id) {
@@ -450,14 +508,15 @@ function compress(file) {
 }
 $('photoInput').addEventListener('change', async e => {
   const files = [...e.target.files];
+  const myDeviceId = getDeviceId();
 
   if (captureIntent === 'checkin') {
     if (!files.length || !pendingCheckin) { toast('A photo is required to check in — tap Check In to try again'); pendingCheckin = null; captureIntent = 'gallery'; render(); return; }
     const {jobId, name, gps} = pendingCheckin;
     try {
       const data = await compress(files[0]);
-      const photoId = pushPath(jobId + '/photos', {phase:'proof-in', data, at:Date.now(), by:name, lat:gps.lat, lng:gps.lng});
-      pushPath(jobId + '/checkins', {name, inAt:Date.now(), inLat:gps.lat, inLng:gps.lng, inAcc:gps.acc, inPhotoId:photoId, outAt:null, verified:false, rewardReleased:false});
+      const photoId = pushPath(jobId + '/photos', {phase:'proof-in', data, at:Date.now(), by:name, lat:gps.lat, lng:gps.lng, deviceId:myDeviceId});
+      pushPath(jobId + '/checkins', {name, deviceId:myDeviceId, inAt:Date.now(), inLat:gps.lat, inLng:gps.lng, inAcc:gps.acc, inPhotoId:photoId, outAt:null, verified:false, rewardReleased:false});
       toast('Checked in ✓ Photo & location logged');
     } catch (err) { toast('Photo failed: ' + err.message); }
     pendingCheckin = null; captureIntent = 'gallery'; render(); return;
@@ -469,7 +528,7 @@ $('photoInput').addEventListener('change', async e => {
     try {
       const data = await compress(files[0]);
       const c = jobs[jobId].checkins[key];
-      const photoId = pushPath(jobId + '/photos', {phase:'proof-out', data, at:Date.now(), by:c.name, lat:gps.lat, lng:gps.lng});
+      const photoId = pushPath(jobId + '/photos', {phase:'proof-out', data, at:Date.now(), by:c.name, lat:gps.lat, lng:gps.lng, deviceId:myDeviceId});
       updatePath(jobId + '/checkins/' + key, {...c, outAt:Date.now(), outLat:gps.lat, outLng:gps.lng, outAcc:gps.acc, outPhotoId:photoId});
       toast('Checked out ✓ Nice work');
     } catch (err) { toast('Photo failed: ' + err.message); }
@@ -483,7 +542,7 @@ $('photoInput').addEventListener('change', async e => {
   for (const f of files) {
     try {
       const data = await compress(f);
-      pushPath(activeJobId + '/photos', {phase:currentPhase, data, at:Date.now(), by:volunteerName||'Volunteer', lat:gps?gps.lat:null, lng:gps?gps.lng:null});
+      pushPath(activeJobId + '/photos', {phase:currentPhase, data, at:Date.now(), by:volunteerName||'Volunteer', lat:gps?gps.lat:null, lng:gps?gps.lng:null, deviceId:myDeviceId});
     } catch (err) { toast('One photo failed: ' + err.message); }
   }
   toast('Added to ' + currentPhase.toUpperCase());
@@ -594,6 +653,8 @@ function renderHome(app) {
           <input type="text" id="nbName" placeholder="e.g. The Pelican">
           <label>Contact email</label>
           <input type="email" id="nbContact" placeholder="events@thebrand.co.uk">
+          <label>Confirm contact email</label>
+          <input type="email" id="nbContactConfirm" placeholder="Re-enter to confirm">
           <div style="height:10px"></div>
           <button class="btn btn-sm btn-ink" onclick="createBrand()">Create Brand Account</button>
           ${lastGeneratedCode ? `<div class="code-box">${esc(lastGeneratedCode.code)}</div>
@@ -636,6 +697,7 @@ function renderNew(app) {
   $('hdrSub').textContent = 'New job';
   hostChoice = 'cause';
   pendingPin = null;
+  newJobMapInstance = null;
   app.innerHTML = `
     <div style="margin:20px 0 6px"><h1>New Job</h1></div>
     <div class="card">
@@ -661,6 +723,8 @@ function renderNew(app) {
         <input type="text" id="nCauseContactName" placeholder="Who EARNT/you will send the link to">
         <label>Cause contact email</label>
         <input type="email" id="nCauseContactEmail" placeholder="them@thecause.org">
+        <label>Confirm cause contact email</label>
+        <input type="email" id="nCauseContactEmailConfirm" placeholder="Re-enter to confirm">
       </div>
       <div id="selfFields" class="hidden">
         <label>Site address</label>
@@ -675,6 +739,7 @@ function renderNew(app) {
           <button class="btn btn-sm btn-ghost" style="flex:1" onclick="pinHere()">📍 Pin my current location</button>
         </div>
         <div class="mono muted" id="nPin" style="font-size:.66rem;margin-top:8px">${pendingPin ? `<span class="gps-ok">✓ Pinned</span> ${pendingPin.lat}, ${pendingPin.lng} · <a href="${mapsLink(pendingPin.lat,pendingPin.lng)}" target="_blank" style="color:inherit">View on map ↗</a>` : 'No pin yet — you can add one later too.'}</div>
+        ${pinMapHTML('nPinMap')}
       </div>
     </div>
     <button class="btn btn-hivis" onclick="createJob()">Create Job</button>
@@ -683,6 +748,11 @@ function renderNew(app) {
     pendingPin = {lat:p.lat, lng:p.lng};
     $('nAddress').value = p.address;
     $('nPin').innerHTML = `<span class="gps-ok">✓ Set from address</span> ${p.lat}, ${p.lng} · <a href="${mapsLink(p.lat,p.lng)}" target="_blank" style="color:inherit">View on map ↗</a>`;
+    movePinMap(newJobMapInstance, p.lat, p.lng);
+  });
+  newJobMapInstance = initPinMap('nPinMap', pendingPin?.lat, pendingPin?.lng, pos => {
+    pendingPin = pos;
+    $('nPin').innerHTML = `<span class="gps-ok">✓ Pinned</span> ${pos.lat}, ${pos.lng} · <a href="${mapsLink(pos.lat,pos.lng)}" target="_blank" style="color:inherit">View on map ↗</a>`;
   });
 }
 function setHost(choice) {
@@ -717,7 +787,11 @@ function createJob() {
     toast('Job created — here\'s its QR code'); go('qr/' + id);
   } else {
     const causeEmail = $('nCauseContactEmail').value.trim();
-    if (causeEmail && !isValidEmail(causeEmail)) return toast('That doesn\'t look like a valid email address');
+    const causeEmailConfirm = $('nCauseContactEmailConfirm').value.trim();
+    if (causeEmail || causeEmailConfirm) {
+      if (causeEmail !== causeEmailConfirm) return toast('Those two emails don\'t match');
+      if (!isValidEmail(causeEmail)) return toast('That doesn\'t look like a valid email address');
+    }
     saveJob(id, {...base, hostedBy:'cause', status:'awaiting_cause',
       causeContactName: $('nCauseContactName').value.trim(), causeContactEmail: causeEmail,
       address:'', lat:null, lng:null});
@@ -732,11 +806,20 @@ function renderCause(app, id) {
   if (jobStage(j) !== 'awaiting_cause') { go('qr/' + id); return; }
   $('hdrSub').textContent = 'Confirm job';
   causePin = j.lat != null ? {lat:j.lat, lng:j.lng} : null;
+  causeMapInstance = null;
   app.innerHTML = `
     <div style="margin:20px 0 6px">
       <div class="eyebrow">${esc(j.brandName)} needs your help</div>
       <h1>${esc(j.name)}</h1>
     </div>
+    ${isAdmin || (currentBrandId && j.brandId===currentBrandId) ? `<div class="card">
+      <h2 style="margin-bottom:8px">Share This With The Cause</h2>
+      <div class="btn-row">
+        <button class="btn btn-sm btn-ghost" style="flex:1" onclick="copyLink('${causeUrl(id).replace(/'/g,"\\'")}')">Copy Link</button>
+        <button class="btn btn-sm btn-ink" style="flex:1" onclick="emailCause('${id}')">✉️ Email the Cause</button>
+      </div>
+      ${!j.causeContactEmail ? '<div class="mono muted" style="font-size:.6rem;margin-top:8px">No email on file — Email the Cause will open a blank email for you to address yourself.</div>' : ''}
+    </div>` : ''}
     <div class="card muted" style="font-size:.82rem">${esc(j.brandName)} has set up this job for volunteers to come and help
       ${esc(j.cause)}. Check the details, add your site's exact location, and confirm — you'll get a printable QR code
       straight away for volunteers to scan and check in.</div>
@@ -756,6 +839,7 @@ function renderCause(app, id) {
       <label>Pin your exact location *</label>
       <div class="btn-row"><button class="btn btn-sm btn-ghost" style="flex:1" onclick="pinCause()">📍 Pin current location</button></div>
       <div class="mono muted" id="cPin" style="font-size:.66rem;margin-top:8px">${causePin ? `<span class="gps-ok">✓ Pinned</span> ${causePin.lat}, ${causePin.lng} · <a href="${mapsLink(causePin.lat,causePin.lng)}" target="_blank" style="color:inherit">View on map ↗</a>` : 'A location pin is required before you can confirm.'}</div>
+      ${pinMapHTML('cPinMap')}
       <label>Notes for volunteers</label>
       <textarea id="cNotes">${esc(j.notes||'')}</textarea>
     </div>
@@ -765,13 +849,33 @@ function renderCause(app, id) {
     causePin = {lat:p.lat, lng:p.lng};
     $('cAddress').value = p.address;
     $('cPin').innerHTML = `<span class="gps-ok">✓ Set from address</span> ${p.lat}, ${p.lng} · <a href="${mapsLink(p.lat,p.lng)}" target="_blank" style="color:inherit">View on map ↗</a>`;
+    movePinMap(causeMapInstance, p.lat, p.lng);
+  });
+  causeMapInstance = initPinMap('cPinMap', causePin?.lat, causePin?.lng, pos => {
+    causePin = pos;
+    $('cPin').innerHTML = `<span class="gps-ok">✓ Pinned</span> ${pos.lat}, ${pos.lng} · <a href="${mapsLink(pos.lat,pos.lng)}" target="_blank" style="color:inherit">View on map ↗</a>`;
   });
 }
 let causePin = null;
+let causeMapInstance = null;
+function emailCause(id) {
+  const j = jobs[id];
+  const url = causeUrl(id);
+  const subject = encodeURIComponent('EARNT job: ' + j.name);
+  const body = encodeURIComponent(
+    (j.causeContactName ? 'Hi ' + j.causeContactName + ',\n\n' : 'Hi,\n\n') +
+    j.brandName + ' would like to run "' + j.name + '" with volunteers' + (j.date ? ' on ' + j.date : '') + '.\n\n' +
+    'Please check the details and confirm here — you\'ll get a printable QR code straight away for volunteers to scan and check in:\n' + url + '\n\nThanks,\nEARNT'
+  );
+  window.location.href = 'mailto:' + (j.causeContactEmail||'') + '?subject=' + subject + '&body=' + body;
+}
 async function pinCause() {
   $('cPin').innerHTML = '<span class="spinner"></span> Getting GPS fix…';
-  try { causePin = await getGPS(); $('cPin').innerHTML = `<span class="gps-ok">✓ Pinned</span> ${causePin.lat}, ${causePin.lng} · <a href="${mapsLink(causePin.lat,causePin.lng)}" target="_blank" style="color:inherit">View on map ↗</a>`; }
-  catch (e) { $('cPin').textContent = e.message; }
+  try {
+    causePin = await getGPS();
+    $('cPin').innerHTML = `<span class="gps-ok">✓ Pinned</span> ${causePin.lat}, ${causePin.lng} · <a href="${mapsLink(causePin.lat,causePin.lng)}" target="_blank" style="color:inherit">View on map ↗</a>`;
+    movePinMap(causeMapInstance, causePin.lat, causePin.lng);
+  } catch (e) { $('cPin').textContent = e.message; }
 }
 function confirmCause(id) {
   const name = $('cJobName').value.trim();
@@ -914,11 +1018,16 @@ function renderJob(app, id) {
   }
 
   $('hdrSub').textContent = esc(j.cause || 'Job');
-  const myKey = volunteerName ? Object.keys(j.checkins||{}).find(k => j.checkins[k].name===volunteerName && !j.checkins[k].outAt) : null;
+  const myDeviceId = getDeviceId();
+  let myKey = Object.keys(j.checkins||{}).find(k => j.checkins[k].deviceId === myDeviceId && !j.checkins[k].outAt);
+  if (!myKey && volunteerName) myKey = Object.keys(j.checkins||{}).find(k => j.checkins[k].name === volunteerName && !j.checkins[k].outAt);
   const me = myKey ? j.checkins[myKey] : null;
+  if (me && !volunteerName) volunteerName = me.name; // recognised purely by device — keep the UI in sync
   const activity = jobActivity(j);
   const photos = Object.entries(j.photos||{}).map(([k,v]) => ({id:k, ...v}));
-  const phasePhotos = p => photos.filter(x => x.phase===p).sort((a,b) => a.at-b.at);
+  // Volunteers only see their OWN uploads here — the combined story is for the Cause/Brand/EARNT roster & report, not for whoever else happens to be checked in.
+  const myPhotos = photos.filter(x => x.deviceId ? x.deviceId===myDeviceId : x.by===volunteerName);
+  const phasePhotos = p => myPhotos.filter(x => x.phase===p).sort((a,b) => a.at-b.at);
   const bandLabel = activity==='live' ? '<span class="pulse"></span>ON SITE' : 'READY TO START';
 
   const phaseBlock = p => {
@@ -949,7 +1058,7 @@ function renderJob(app, id) {
           <input type="text" id="volName" placeholder="First name + surname" autocomplete="name">
           <div style="height:10px"></div>` : `
           <div class="mono muted" style="font-size:.66rem;margin-bottom:10px">Signed in as <b style="color:var(--ink)">${esc(volunteerName)}</b>
-            <button class="link-btn" onclick="volunteerName=null;render()" style="padding:0 0 0 8px">change</button></div>`}
+            <button class="link-btn" onclick="clearVolunteerName();render()" style="padding:0 0 0 8px">change</button></div>`}
         <div class="stamp-row">
           <div class="stamp ${me&&me.inAt?'filled':''}"><div class="s-label">Check in</div><div class="s-time">${me&&me.inAt?fmtTime(me.inAt):'--:--'}</div>
             <div class="s-gps">${me&&me.inLat?gpsLine(j,me.inLat,me.inLng):''}</div></div>
@@ -966,6 +1075,7 @@ function renderJob(app, id) {
     </div>
     <div class="card">
       <h2>Photo Evidence</h2>
+      <div class="mono muted" style="font-size:.62rem;margin-bottom:10px">You'll only see your own photos here — the full team's story goes straight to ${esc(j.cause||'the Cause')} and EARNT.</div>
       <div class="phase-tabs">${['before','during','after'].map(p => `<button class="phase-tab ${currentPhase===p?'active':''}" onclick="switchPhase('${p}')">${p}${phasePhotos(p).length?' ('+phasePhotos(p).length+')':''}</button>`).join('')}</div>
       ${['before','during','after'].map(phaseBlock).join('')}
     </div>
@@ -974,7 +1084,7 @@ function renderJob(app, id) {
 function switchPhase(p) { currentPhase = p; render(); }
 
 async function beginCheckIn(jobId) {
-  if (!volunteerName) { const v = $('volName') ? $('volName').value.trim() : ''; if (!v) return toast('Enter your name first'); volunteerName = v; }
+  if (!volunteerName) { const v = $('volName') ? $('volName').value.trim() : ''; if (!v) return toast('Enter your name first'); setVolunteerName(v); }
   const btn = $('ciBtn'); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Getting location…';
   try {
     const gps = await getGPS();
@@ -1037,6 +1147,7 @@ function renderReport(app, id) {
 
 /* ---------- boot ---------- */
 restoreSession();
+restoreVolunteerName();
 render();
 setInterval(() => {
   const h = location.hash.slice(1);
