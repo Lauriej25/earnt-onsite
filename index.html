@@ -38,10 +38,10 @@
 
   /* ---------- modal ---------- */
   .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:55;display:none;
-    align-items:flex-end;justify-content:center}
+    align-items:center;justify-content:center;padding:20px}
   .modal-overlay.open{display:flex}
-  .modal-box{background:var(--paper);width:100%;max-width:520px;max-height:82vh;border-radius:16px 16px 0 0;
-    overflow:hidden;display:flex;flex-direction:column}
+  .modal-box{background:var(--paper);width:100%;max-width:480px;max-height:82vh;border-radius:16px;
+    overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.35)}
   .modal-header{background:var(--ink);color:#fff;padding:14px 16px;display:flex;justify-content:space-between;
     align-items:center;flex-shrink:0}
   .modal-header .mh-title{font-family:'Archivo Black';font-size:.9rem;text-transform:uppercase;letter-spacing:.03em}
@@ -329,6 +329,7 @@ let brands = {};
 let isAdmin = false, adminGateOpen = false;
 let currentBrandId = null, brandGateOpen = false;
 let volunteerName = null;
+let volunteerPhone = null;
 let currentPhase = 'before';
 let activeJobId = null;
 let captureIntent = 'gallery'; // 'gallery' | 'checkin' | 'checkout'
@@ -359,7 +360,7 @@ if (!DEMO) {
       hostedBy: 'cause', status: 'confirmed',
       createdAt: now - 86400000, confirmedAt: now - 80000000,
       checkins: {
-        v1: { name: 'Alex Turner', inAt: now - 14400000, inLat: 51.4817, inLng: -0.2250, inAcc: 12, inPhotoId: 'p1',
+        v1: { name: 'Alex Turner', phone: '07700 900123', inAt: now - 14400000, inLat: 51.4817, inLng: -0.2250, inAcc: 12, inPhotoId: 'p1',
               outAt: now - 400000, outLat: 51.4817, outLng: -0.2250, outAcc: 10, outPhotoId: 'p2', verified: true, verifiedAt: now - 300000, rewardReleased: false }
       },
       photos: {
@@ -484,12 +485,31 @@ function renderBrandJobsModalBody(brandId) {
       </div>
     </div>`;
   };
+  const unowned = Object.keys(jobs).filter(id => !jobs[id].brandId && !hiddenIds.has('job:'+id));
+  const linkSection = unowned.length ? `<div class="static-field" style="margin-top:8px">
+      <div class="sf-label">Link a job EARNT created</div>
+      <div class="mono muted" style="font-size:.62rem;margin:4px 0 8px">So this Brand sees it the moment they log in.</div>
+      <div class="btn-row">
+        <select id="linkJobSelect" style="flex:1;padding:10px;border:1px solid var(--line);border-radius:10px;font-family:'Archivo';font-size:.8rem;background:#fff;color:var(--ink)">
+          ${unowned.map(id => `<option value="${id}">${esc(jobs[id].name)}${jobs[id].date?' · '+esc(jobs[id].date):''}</option>`).join('')}
+        </select>
+        <button class="btn btn-sm btn-ink" onclick="linkJobToBrand($('linkJobSelect').value,'${brandId}')">Link</button>
+      </div>
+    </div>` : '';
   $('modalBody').innerHTML = `
     ${details}
+    ${linkSection}
     <h2 style="margin:18px 0 8px">Current</h2>
     ${current.length ? current.map(row).join('') : '<div class="muted" style="font-size:.8rem;margin-bottom:16px">None right now.</div>'}
     <h2 style="margin:18px 0 8px">Past</h2>
     ${past.length ? past.map(row).join('') : '<div class="muted" style="font-size:.8rem">No completed jobs yet.</div>'}`;
+}
+function linkJobToBrand(jobId, brandId) {
+  const j = jobs[jobId], b = brands[brandId];
+  if (!j || !b) return;
+  saveJob(jobId, {...j, brandId, brandName: b.name});
+  toast('Linked to ' + b.name);
+  renderBrandJobsModalBody(brandId);
 }
 
 /* ---------- helpers ---------- */
@@ -581,15 +601,23 @@ function getDeviceId() {
 function restoreVolunteerName() {
   const n = localStorage.getItem('earnt_volunteer_name');
   if (n) volunteerName = n;
+  const p = localStorage.getItem('earnt_volunteer_phone');
+  if (p) volunteerPhone = p;
 }
 function setVolunteerName(name) {
   volunteerName = name;
   localStorage.setItem('earnt_volunteer_name', name);
 }
-function clearVolunteerName() {
-  volunteerName = null;
-  localStorage.removeItem('earnt_volunteer_name');
+function setVolunteerPhone(phone) {
+  volunteerPhone = phone;
+  localStorage.setItem('earnt_volunteer_phone', phone);
 }
+function clearVolunteerIdentity() {
+  volunteerName = null; volunteerPhone = null;
+  localStorage.removeItem('earnt_volunteer_name');
+  localStorage.removeItem('earnt_volunteer_phone');
+}
+function isValidPhone(s) { return (s||'').replace(/[^\d]/g,'').length >= 7; }
 
 function toggleBrandGate() { brandGateOpen = !brandGateOpen; adminGateOpen = false; render(); }
 function generateCode(len = 8) {
@@ -651,11 +679,11 @@ $('photoInput').addEventListener('change', async e => {
 
   if (captureIntent === 'checkin') {
     if (!files.length || !pendingCheckin) { toast('A photo is required to check in — tap Check In to try again'); pendingCheckin = null; captureIntent = 'gallery'; render(); return; }
-    const {jobId, name, gps} = pendingCheckin;
+    const {jobId, name, phone, gps} = pendingCheckin;
     try {
       const data = await compress(files[0]);
       const photoId = pushPath(jobId + '/photos', {phase:'proof-in', data, at:Date.now(), by:name, lat:gps.lat, lng:gps.lng, deviceId:myDeviceId});
-      pushPath(jobId + '/checkins', {name, deviceId:myDeviceId, inAt:Date.now(), inLat:gps.lat, inLng:gps.lng, inAcc:gps.acc, inPhotoId:photoId, outAt:null, verified:false, rewardReleased:false});
+      pushPath(jobId + '/checkins', {name, phone, deviceId:myDeviceId, inAt:Date.now(), inLat:gps.lat, inLng:gps.lng, inAcc:gps.acc, inPhotoId:photoId, outAt:null, verified:false, rewardReleased:false});
       toast('Checked in ✓ Photo & location logged');
     } catch (err) { toast('Photo failed: ' + err.message); }
     pendingCheckin = null; captureIntent = 'gallery'; render(); return;
@@ -1168,8 +1196,8 @@ function renderQR(app, id) {
     ${isAdmin || (currentBrandId && j.brandId===currentBrandId) ? `<div style="height:10px" class="no-print"></div>
     <button class="btn btn-ghost no-print" onclick="go('report/${id}')">View Client Report</button>` : ''}
     <div class="no-print">${gallerySection()}</div>
-    <div class="no-print">${rosterSection(j, id, {canVerify:true, canRelease:isAdmin})}</div>
-    ${isAdmin ? `<div class="no-print">${activityLogSection(j)}</div>` : ''}
+    <div class="no-print">${rosterSection(j, id, {canVerify:true, canRelease:isAdmin, canExport:isAdmin || (currentBrandId && j.brandId===currentBrandId)})}</div>
+    ${isAdmin ? `<div class="no-print">${activityLogSection(j, id)}</div>` : ''}
     <button class="link-btn no-print" style="display:block;margin:12px auto" onclick="go('')">← All jobs</button>`;
 
   const box = document.getElementById('qrcanvas'); box.innerHTML = '';
@@ -1206,13 +1234,18 @@ function reopenJob(id) {
 
 /* ---------- roster (shared between QR page and report) ---------- */
 /* ---------- activity log (EARNT admin only) ---------- */
-function activityLogSection(j) {
-  const entries = Object.values(j.activityLog||{}).sort((a,b) => b.at - a.at);
+function activityLogSection(j, id) {
+  const cleared = hiddenIds.has('log:' + id);
+  const entries = cleared ? [] : Object.values(j.activityLog||{}).sort((a,b) => b.at - a.at);
   const icons = {completed:'✅', reopened:'🔄'};
   const labels = {completed:'Completed by', reopened:'Reopened by'};
+  const safeLabel = 'Activity log';
   return `<div class="card">
-    <h2>Activity Log</h2>
-    <div class="mono muted" style="font-size:.58rem;margin-bottom:10px">Visible to EARNT admin only.</div>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h2 style="margin-bottom:0">Activity Log</h2>
+      ${entries.length ? `<button class="link-btn" style="padding:0" onclick="requestDelete('log','${id}','${safeLabel}',()=>updatePath('${id}/activityLog',null))">Clear log</button>` : ''}
+    </div>
+    <div class="mono muted" style="font-size:.58rem;margin:4px 0 10px">Visible to EARNT admin only.</div>
     ${entries.length ? entries.map(e => `<div class="mono" style="font-size:.7rem;padding:7px 0;border-bottom:1px solid var(--line)">
       ${icons[e.action]||'•'} ${labels[e.action]||e.action} <b>${esc(e.by)}</b>
       <span class="muted" style="display:block;font-size:.62rem;margin-top:2px">${fmtDate(e.at)} at ${fmtTime(e.at)}</span>
@@ -1226,12 +1259,21 @@ function rosterSection(j, id, opts) {
     An Earned Thank You can't be marked released until it's verified.</div>`;
   if (!cis.length) return `<div class="card"><h2>Roster</h2>${legend}<div class="muted" style="font-size:.82rem">No check-ins yet.</div></div>`;
   const photos = j.photos||{};
-  return `<div class="card"><h2>Roster</h2>${legend}${cis.map(([key,c]) => {
+  const outCount = cis.filter(([,c]) => c.outAt).length;
+  const verifiedCount = cis.filter(([,c]) => c.verified).length;
+  const releasedCount = cis.filter(([,c]) => c.rewardReleased).length;
+  const allReconciled = outCount > 0 && verifiedCount === outCount && releasedCount === outCount;
+  const summary = `<div class="legend-box" style="background:${allReconciled?'var(--go-light)':'var(--pending-light)'};border-color:${allReconciled?'var(--go)':'var(--pending)'}">
+    <b style="color:${allReconciled?'var(--go)':'var(--pending)'}">${allReconciled?'✓ Fully reconciled':'Checker'}</b>
+    ${cis.length} checked in · ${outCount} checked out · ${verifiedCount} of ${outCount} verified · ${releasedCount} of ${outCount} ETY released
+  </div>`;
+  const exportBtn = (opts.canRelease || opts.canExport) ? `<button class="btn btn-sm btn-ghost" style="width:100%;margin-bottom:12px" onclick="exportJobCSV('${id}')">⬇ Export Roster as CSV</button>` : '';
+  return `<div class="card"><h2>Roster</h2>${legend}${summary}${exportBtn}${cis.map(([key,c]) => {
     const inP = c.inPhotoId && photos[c.inPhotoId], outP = c.outPhotoId && photos[c.outPhotoId];
     return `<div class="roster-row">
       <div class="rr-top">
         <div><div class="rr-name">${esc(c.name)}</div>
-          <div class="rr-time">In ${fmtTime(c.inAt)}${c.outAt ? ' → Out '+fmtTime(c.outAt)+' ('+fmtDur(c.outAt-c.inAt)+')' : ' · <span class="gps-ok">on site</span>'}</div>
+          <div class="rr-time">${c.phone ? esc(c.phone) + ' · ' : ''}In ${fmtTime(c.inAt)}${c.outAt ? ' → Out '+fmtTime(c.outAt)+' ('+fmtDur(c.outAt-c.inAt)+')' : ' · <span class="gps-ok">on site</span>'}</div>
           <div class="rr-time">${gpsLine(j, c.inLat, c.inLng)}</div>
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
@@ -1258,6 +1300,34 @@ function toggleReward(jobId, key) {
   const c = jobs[jobId].checkins[key];
   if (!c.verified) return toast('Verify attendance before releasing an ETY');
   updatePath(jobId + '/checkins/' + key, {...c, rewardReleased: !c.rewardReleased, rewardReleasedAt: !c.rewardReleased ? Date.now() : null});
+}
+
+/* ---------- CSV export ---------- */
+function csvCell(v) {
+  const s = (v === null || v === undefined) ? '' : String(v);
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+}
+function exportJobCSV(id) {
+  const j = jobs[id];
+  const header = ['Name','Phone','Check-in Time','Check-in GPS','Check-out Time','Check-out GPS','Duration',
+    'Verified','Verified At','ETY Released','Released At'];
+  const rows = Object.values(j.checkins||{}).sort((a,b) => a.inAt-b.inAt).map(c => [
+    c.name, c.phone||'',
+    new Date(c.inAt).toLocaleString('en-GB'), c.inLat!=null ? c.inLat+', '+c.inLng : '',
+    c.outAt ? new Date(c.outAt).toLocaleString('en-GB') : '', c.outLat!=null ? c.outLat+', '+c.outLng : '',
+    c.outAt ? fmtDur(c.outAt-c.inAt) : '',
+    c.verified ? 'Yes' : 'No', c.verifiedAt ? new Date(c.verifiedAt).toLocaleString('en-GB') : '',
+    c.rewardReleased ? 'Yes' : 'No', c.rewardReleasedAt ? new Date(c.rewardReleasedAt).toLocaleString('en-GB') : ''
+  ]);
+  const csv = [header, ...rows].map(r => r.map(csvCell).join(',')).join('\r\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const safeName = (j.name||'job').replace(/[^a-z0-9]+/gi,'_');
+  a.href = url; a.download = `EARNT_${safeName}_${j.date||''}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  toast('CSV downloaded');
 }
 
 /* ---------- VOLUNTEER check-in page ---------- */
@@ -1287,7 +1357,10 @@ function renderJob(app, id) {
   let myKey = Object.keys(j.checkins||{}).find(k => j.checkins[k].deviceId === myDeviceId && !j.checkins[k].outAt);
   if (!myKey && volunteerName) myKey = Object.keys(j.checkins||{}).find(k => j.checkins[k].name === volunteerName && !j.checkins[k].outAt);
   const me = myKey ? j.checkins[myKey] : null;
-  if (me && !volunteerName) volunteerName = me.name; // recognised purely by device — keep the UI in sync
+  if (me) {
+    if (!volunteerName) volunteerName = me.name; // recognised purely by device — keep the UI in sync
+    if (!volunteerPhone && me.phone) volunteerPhone = me.phone;
+  }
   const activity = jobActivity(j);
   const photos = Object.entries(j.photos||{}).map(([k,v]) => ({id:k, ...v}));
   // Volunteers only see their OWN uploads here — the combined story is for the Cause/Brand/EARNT roster & report, not for whoever else happens to be checked in.
@@ -1320,11 +1393,14 @@ function renderJob(app, id) {
     <div class="docket">
       <div class="docket-band ${activity==='live'?'live':''}"><span class="band-label">${bandLabel}</span></div>
       <div class="docket-body">
-        ${!volunteerName ? `<label style="margin-top:0">Your name</label>
-          <input type="text" id="volName" placeholder="First name + surname" autocomplete="name">
+        ${!volunteerName || !volunteerPhone ? `<label style="margin-top:0">Your name</label>
+          <input type="text" id="volName" placeholder="First name + surname" autocomplete="name" value="${esc(volunteerName||'')}">
+          <label>Phone number</label>
+          <input type="text" id="volPhone" placeholder="So we can call if we need to check in" autocomplete="tel" value="${esc(volunteerPhone||'')}">
+          <div class="mono muted" style="font-size:.6rem;margin-top:4px">Kept on file with your check-in — helps us confirm everyone's real details.</div>
           <div style="height:10px"></div>` : `
-          <div class="mono muted" style="font-size:.66rem;margin-bottom:10px">Signed in as <b style="color:var(--ink)">${esc(volunteerName)}</b>
-            <button class="link-btn" onclick="clearVolunteerName();render()" style="padding:0 0 0 8px">change</button></div>`}
+          <div class="mono muted" style="font-size:.66rem;margin-bottom:10px">Signed in as <b style="color:var(--ink)">${esc(volunteerName)}</b> · ${esc(volunteerPhone)}
+            <button class="link-btn" onclick="clearVolunteerIdentity();render()" style="padding:0 0 0 8px">change</button></div>`}
         <div class="stamp-row">
           <div class="stamp ${me&&me.inAt?'filled':''}"><div class="s-label">Check in</div><div class="s-time">${me&&me.inAt?fmtTime(me.inAt):'--:--'}</div>
             <div class="s-gps">${me&&me.inLat?gpsLine(j,me.inLat,me.inLng):''}</div></div>
@@ -1351,11 +1427,18 @@ function renderJob(app, id) {
 function switchPhase(p) { currentPhase = p; render(); }
 
 async function beginCheckIn(jobId) {
-  if (!volunteerName) { const v = $('volName') ? $('volName').value.trim() : ''; if (!v) return toast('Enter your name first'); setVolunteerName(v); }
+  if (!volunteerName || !volunteerPhone) {
+    const v = $('volName') ? $('volName').value.trim() : '';
+    const p = $('volPhone') ? $('volPhone').value.trim() : '';
+    if (!v) return toast('Enter your name first');
+    if (!p) return toast('Enter a phone number too — we may need to call and check in');
+    if (!isValidPhone(p)) return toast('That doesn\u2019t look like a valid phone number');
+    setVolunteerName(v); setVolunteerPhone(p);
+  }
   const btn = $('ciBtn'); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Getting location…';
   try {
     const gps = await getGPS();
-    pendingCheckin = {jobId, name: volunteerName, gps};
+    pendingCheckin = {jobId, name: volunteerName, phone: volunteerPhone, gps};
     captureIntent = 'checkin';
     toast('Now take a quick photo to confirm you\u2019re on site', 4000);
     $('photoInput').value = ''; $('photoInput').click();
@@ -1410,8 +1493,8 @@ function renderReport(app, id) {
       ${viewMapHTML('reportViewMap', j.lat, j.lng)}</div>` : ''}
     ${section('before','Before')}${section('during','During')}${section('after','After')}
     ${!photos.length ? '<div class="card muted" style="text-align:center">No photos yet.</div>' : ''}
-    ${rosterSection(j, id, {canVerify:isAdmin, canRelease:isAdmin})}
-    ${isAdmin ? activityLogSection(j) : ''}
+    ${rosterSection(j, id, {canVerify:isAdmin, canRelease:isAdmin, canExport:isAdmin || (currentBrandId && j.brandId===currentBrandId)})}
+    ${isAdmin ? activityLogSection(j, id) : ''}
     <div class="footer-mark">Verified by EARNT · Actions speak louder than money</div>`;
   initViewMap('reportViewMap', j.lat, j.lng);
 }
