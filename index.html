@@ -35,6 +35,30 @@
   .addr-row{display:flex;gap:8px}
   .addr-row select{border:1px solid var(--line);border-radius:10px;padding:0 8px;font-family:'Archivo';
     font-size:.78rem;background:#fff;color:var(--ink)}
+
+  /* ---------- modal ---------- */
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:55;display:none;
+    align-items:flex-end;justify-content:center}
+  .modal-overlay.open{display:flex}
+  .modal-box{background:var(--paper);width:100%;max-width:520px;max-height:82vh;border-radius:16px 16px 0 0;
+    overflow:hidden;display:flex;flex-direction:column}
+  .modal-header{background:var(--ink);color:#fff;padding:14px 16px;display:flex;justify-content:space-between;
+    align-items:center;flex-shrink:0}
+  .modal-header .mh-title{font-family:'Archivo Black';font-size:.9rem;text-transform:uppercase;letter-spacing:.03em}
+  .modal-header button{background:none;border:none;color:#fff;font-size:1.2rem;cursor:pointer;padding:0 4px}
+  .modal-body{padding:16px;overflow-y:auto}
+  .modal-job-row{border:1px solid var(--line);border-radius:10px;padding:11px 12px;margin-bottom:8px;
+    display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .modal-job-row .mj-name{font-weight:700;font-size:.84rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .modal-job-row .mj-meta{font-family:'IBM Plex Mono';font-size:.58rem;color:var(--muted);margin-top:2px}
+
+  /* ---------- undo bar ---------- */
+  .undo-bar{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(12px);background:var(--ink);
+    color:#fff;padding:12px 16px;border-radius:12px;display:flex;align-items:center;gap:12px;z-index:56;
+    opacity:0;pointer-events:none;transition:opacity .2s, transform .2s;font-size:.76rem;max-width:90vw}
+  .undo-bar.show{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0)}
+  .undo-bar button{background:var(--hivis);color:var(--ink);border:none;border-radius:8px;padding:6px 10px;
+    font-weight:700;font-size:.68rem;cursor:pointer;white-space:nowrap;flex-shrink:0}
   h1{font-family:'Archivo Black';font-size:1.6rem;line-height:1.08;text-transform:uppercase}
   h2{font-family:'Archivo Black';font-size:1rem;text-transform:uppercase;letter-spacing:.03em;margin-bottom:10px}
   .eyebrow{font-family:'IBM Plex Mono';font-size:.6rem;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
@@ -174,6 +198,13 @@
   <img id="lbImg" alt="Job photo">
   <div class="lb-meta" id="lbMeta"></div>
 </div>
+<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this) closeModal()">
+  <div class="modal-box">
+    <div class="modal-header"><div class="mh-title" id="modalTitle"></div><button onclick="closeModal()" aria-label="Close">✕</button></div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+<div class="undo-bar" id="undoBar"></div>
 <input type="file" accept="image/*" capture="environment" multiple id="photoInput" class="hidden">
 
 <script>
@@ -290,6 +321,7 @@ function initViewMap(divId, lat, lng) {
 const ADMIN_HASH = '50848f637d55a1ce659682513fa030a19ae9d5f1d85bf0aa76424bc5581f480d';
 
 const DEMO = !FIREBASE_CONFIG;
+let dataLoaded = DEMO;
 let db = null;
 let jobs = {};
 let brands = {};
@@ -310,7 +342,7 @@ let hostChoice = 'cause'; // 'cause' | 'self' — used on the New Job form
 if (!DEMO) {
   firebase.initializeApp(FIREBASE_CONFIG);
   db = firebase.database();
-  db.ref('jobs').on('value', s => { jobs = s.val() || {}; render(); });
+  db.ref('jobs').on('value', s => { jobs = s.val() || {}; dataLoaded = true; render(); });
   db.ref('brands').on('value', s => { brands = s.val() || {}; render(); });
 } else {
   const now = Date.now();
@@ -364,8 +396,86 @@ function pushPath(path, val) {
 }
 function newId() { return DEMO ? 'j' + Math.random().toString(36).slice(2, 9) : db.ref('jobs').push().key; }
 function deleteJob(id) { if (DEMO) { delete jobs[id]; render(); } else db.ref('jobs/' + id).remove(); }
+function deleteBrand(id) { if (DEMO) { delete brands[id]; render(); } else db.ref('brands/' + id).remove(); }
 function saveBrand(id, b) { if (DEMO) { brands[id] = b; render(); } else db.ref('brands/' + id).set(b); }
 function newBrandId() { return DEMO ? 'b' + Math.random().toString(36).slice(2, 9) : db.ref('brands').push().key; }
+
+/* ---------- delete with a 15-second undo ----------
+   Deleting hides the item immediately (so lists feel responsive) but the
+   real database delete only happens after the countdown finishes, unless
+   Undo is tapped. Works the same way everywhere it's used. */
+const hiddenIds = new Set();
+let pendingDelete = null;
+function requestDelete(kind, id, label, doDelete) {
+  if (!confirm(`Delete "${label}"? You'll have 15 seconds to undo this before it's gone for good.`)) return;
+  if (pendingDelete) finalizePendingDelete();
+  hiddenIds.add(kind + ':' + id);
+  pendingDelete = {kind, id, label, doDelete, secondsLeft: 15, timer: null};
+  render();
+  tickUndoBar();
+}
+function tickUndoBar() {
+  if (!pendingDelete) return;
+  const bar = $('undoBar');
+  bar.classList.add('show');
+  bar.innerHTML = `<span>"${esc(pendingDelete.label)}" deleted</span><button onclick="undoDelete()">Undo (${pendingDelete.secondsLeft}s)</button>`;
+  if (pendingDelete.secondsLeft <= 0) { pendingDelete.timer = setTimeout(finalizePendingDelete, 300); return; }
+  pendingDelete.timer = setTimeout(() => { if (pendingDelete) { pendingDelete.secondsLeft--; tickUndoBar(); } }, 1000);
+}
+function undoDelete() {
+  if (!pendingDelete) return;
+  clearTimeout(pendingDelete.timer);
+  hiddenIds.delete(pendingDelete.kind + ':' + pendingDelete.id);
+  pendingDelete = null;
+  $('undoBar').classList.remove('show');
+  toast('Restored');
+  render();
+}
+function finalizePendingDelete() {
+  if (!pendingDelete) return;
+  clearTimeout(pendingDelete.timer);
+  const {kind, id, doDelete} = pendingDelete;
+  hiddenIds.delete(kind + ':' + id);
+  pendingDelete = null;
+  $('undoBar').classList.remove('show');
+  doDelete();
+}
+
+/* ---------- brand jobs modal ---------- */
+let openModalBrandId = null;
+function openBrandJobsModal(brandId) {
+  const b = brands[brandId]; if (!b) return;
+  openModalBrandId = brandId;
+  $('modalTitle').textContent = b.name + ' · Jobs';
+  renderBrandJobsModalBody(brandId);
+  $('modalOverlay').classList.add('open');
+}
+function closeModal() { openModalBrandId = null; $('modalOverlay').classList.remove('open'); }
+function renderBrandJobsModalBody(brandId) {
+  const ids = Object.keys(jobs).filter(id => jobs[id].brandId===brandId && !hiddenIds.has('job:'+id));
+  const current = ids.filter(id => jobStage(jobs[id]) !== 'completed');
+  const past = ids.filter(id => jobStage(jobs[id]) === 'completed');
+  const row = id => {
+    const j = jobs[id], st = jobStage(j);
+    const label = st==='awaiting_cause' ? 'Awaiting cause' : st==='completed' ? 'Complete' : jobActivity(j)==='live' ? 'On site now' : 'Not started';
+    const safeName = esc(j.name).replace(/'/g,"\\'");
+    return `<div class="modal-job-row">
+      <div style="min-width:0;cursor:pointer" onclick="closeModal();go('${st==='awaiting_cause'?'cause':'qr'}/${id}')">
+        <div class="mj-name">${esc(j.name)}</div>
+        <div class="mj-meta">${esc(j.cause||'')}${j.date?' · '+esc(j.date):''} · ${label}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="toggle-btn" onclick="closeModal();go('edit/${id}')">Edit</button>
+        <button class="toggle-btn" style="border-color:var(--stop);color:var(--stop)" onclick="requestDelete('job','${id}','${safeName}',()=>deleteJob('${id}'))">Delete</button>
+      </div>
+    </div>`;
+  };
+  $('modalBody').innerHTML = `
+    <h2 style="margin-bottom:8px">Current</h2>
+    ${current.length ? current.map(row).join('') : '<div class="muted" style="font-size:.8rem;margin-bottom:16px">None right now.</div>'}
+    <h2 style="margin:18px 0 8px">Past</h2>
+    ${past.length ? past.map(row).join('') : '<div class="muted" style="font-size:.8rem">No completed jobs yet.</div>'}`;
+}
 
 /* ---------- helpers ---------- */
 const $ = id => document.getElementById(id);
@@ -604,12 +714,14 @@ function render() {
 
   const app = $('app'); window.scrollTo(0,0);
   updateHeaderRole();
-  if (h.startsWith('report/')) return renderReport(app, h.split('/')[1]);
-  if (h.startsWith('cause/'))  return renderCause(app, h.split('/')[1]);
-  if (h.startsWith('qr/'))     return renderQR(app, h.split('/')[1]);
-  if (h.startsWith('job/'))    return renderJob(app, h.split('/')[1]);
-  if (h === 'new')             return renderNew(app);
-  renderHome(app);
+  if (h.startsWith('report/')) renderReport(app, h.split('/')[1]);
+  else if (h.startsWith('cause/'))  renderCause(app, h.split('/')[1]);
+  else if (h.startsWith('qr/'))     renderQR(app, h.split('/')[1]);
+  else if (h.startsWith('edit/'))   renderEditJob(app, h.split('/')[1]);
+  else if (h.startsWith('job/'))    renderJob(app, h.split('/')[1]);
+  else if (h === 'new')             renderNew(app);
+  else renderHome(app);
+  if (openModalBrandId) renderBrandJobsModalBody(openModalBrandId);
 }
 function updateHeaderRole() {
   if (isAdmin) $('hdrRight').innerHTML = '<span class="role-pill">EARNT ADMIN</span>';
@@ -633,6 +745,7 @@ function renderHome(app) {
   if (isAdmin) jobIds = Object.keys(jobs);
   else if (currentBrandId) jobIds = Object.keys(jobs).filter(id => jobs[id].brandId === currentBrandId);
   else jobIds = [];
+  jobIds = jobIds.filter(id => !hiddenIds.has('job:'+id));
   const rank = j => jobStage(j) === 'awaiting_cause' ? 0 : jobStage(j) === 'completed' ? 3 : jobActivity(j) === 'live' ? 1 : 2;
   jobIds.sort((a,b) => rank(jobs[a]) - rank(jobs[b]) || (jobs[b].createdAt||0) - (jobs[a].createdAt||0));
 
@@ -651,18 +764,29 @@ function renderHome(app) {
         <div class="meta">${esc(j.date||'')}${vols ? ' · '+vols+' volunteer'+(vols>1?'s':'') : ''}</div>
         ${chipFor(j)}
       </button>`;
-    }).join('') : `<div class="card muted" style="text-align:center;padding:26px">No jobs yet.</div>`;
+    }).join('') : `<div class="card muted" style="text-align:center;padding:26px">${dataLoaded ? (currentBrandId ? 'No jobs yet — jobs you create will show up here.' : 'No jobs yet.') : 'Loading…'}</div>`;
     body += `<div style="margin-top:16px"><button class="btn btn-ghost" onclick="go('new')">+ New Job</button></div>`;
 
     if (isAdmin) {
       body += `<div style="margin-top:28px"><h2>Brand Accounts</h2></div><div class="card">`;
-      const bIds = Object.keys(brands);
-      body += bIds.length ? bIds.map(id => `<div class="brand-row"><div><div style="font-weight:700;font-size:.88rem">${esc(brands[id].name)}</div>
-        <div class="mono muted" style="font-size:.62rem">${esc(brands[id].contact||'')}</div>
-        ${resetCodeShown === id ? `<div class="code-box" style="margin:8px 0 0">${esc(resetCodeShown_value)}</div>
-          <div class="mono muted" style="font-size:.58rem">New code — share it now, it won't be shown again.</div>` : ''}
+      const bIds = Object.keys(brands).filter(id => !hiddenIds.has('brand:'+id));
+      body += bIds.length ? bIds.map(id => {
+        const jobCount = Object.keys(jobs).filter(jid => jobs[jid].brandId===id).length;
+        const safeName = esc(brands[id].name).replace(/'/g,"\\'");
+        return `<div class="brand-row" style="flex-direction:column;align-items:stretch;gap:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="openBrandJobsModal('${id}')">
+          <div><div style="font-weight:700;font-size:.88rem">${esc(brands[id].name)}</div>
+            <div class="mono muted" style="font-size:.62rem">${esc(brands[id].contact||'')} · ${jobCount} job${jobCount!==1?'s':''}</div></div>
+          <span class="mono muted" style="font-size:1rem">›</span>
         </div>
-        <button class="toggle-btn" onclick="resetBrandCode('${id}')">Reset Code</button></div>`).join('') : '<div class="muted" style="font-size:.82rem">No brand accounts yet.</div>';
+        ${resetCodeShown === id ? `<div class="code-box" style="margin:0">${esc(resetCodeShown_value)}</div>
+          <div class="mono muted" style="font-size:.58rem">New code — share it now, it won't be shown again.</div>` : ''}
+        <div class="btn-row">
+          <button class="toggle-btn" style="flex:1" onclick="resetBrandCode('${id}')">Reset Code</button>
+          <button class="toggle-btn" style="flex:1;border-color:var(--stop);color:var(--stop)" onclick="requestDelete('brand','${id}','${safeName}',()=>deleteBrand('${id}'))">Delete Brand</button>
+        </div>
+      </div>`;
+      }).join('') : '<div class="muted" style="font-size:.82rem">No brand accounts yet.</div>';
       body += `</div>
         <div class="card">
           <label style="margin-top:0">Brand name</label>
@@ -816,6 +940,78 @@ function createJob() {
 }
 
 /* ---------- CAUSE confirmation ---------- */
+/* ---------- EDIT JOB (admin only) ---------- */
+let editPin = null, editMapInstance = null;
+function renderEditJob(app, id) {
+  if (!isAdmin) { toast('Only EARNT admin can edit a job directly'); go(''); return; }
+  const j = jobs[id];
+  if (!j) { app.innerHTML = '<div class="card" style="margin-top:20px">Job not found.</div>'; return; }
+  $('hdrSub').textContent = 'Edit job';
+  editPin = j.lat != null ? {lat:j.lat, lng:j.lng} : null;
+  editMapInstance = null;
+  app.innerHTML = `
+    <div style="margin:20px 0 6px"><h1>Edit Job</h1></div>
+    <div class="card">
+      <label style="margin-top:0">Job name</label>
+      <input type="text" id="eJobName" value="${esc(j.name)}">
+      <label>Cause / organisation</label>
+      <input type="text" id="eCause" value="${esc(j.cause||'')}">
+      <label>Owned by</label>
+      <select id="eBrand">
+        <option value="" ${!j.brandId?'selected':''}>EARNT</option>
+        ${Object.keys(brands).map(bid => `<option value="${bid}" ${j.brandId===bid?'selected':''}>${esc(brands[bid].name)}</option>`).join('')}
+      </select>
+      <label>Date</label>
+      <input type="date" id="eDate" value="${esc(j.date||'')}">
+      <label>Site address</label>
+      <div class="addr-row">
+        <input type="text" id="eAddress" placeholder="Start typing an address…" value="${esc(j.address||'')}" style="flex:1">
+        ${countrySelectHTML('eCountry', 'gb')}
+      </div>
+      <label>Directions / how to find us</label>
+      <textarea id="eDirections">${esc(j.directions||'')}</textarea>
+      <label>Pin location</label>
+      <div class="btn-row"><button class="btn btn-sm btn-ghost" style="flex:1" onclick="pinEdit()">📍 Pin current location</button></div>
+      <div class="mono muted" id="ePin" style="font-size:.66rem;margin-top:8px">${editPin ? `<span class="gps-ok">✓ Pinned</span> ${editPin.lat}, ${editPin.lng} · <a href="${mapsLink(editPin.lat,editPin.lng)}" target="_blank" style="color:inherit">View on map ↗</a>` : 'Not pinned.'}</div>
+      ${pinMapHTML('ePinMap')}
+      <label>Notes for volunteers</label>
+      <textarea id="eNotes">${esc(j.notes||'')}</textarea>
+    </div>
+    <button class="btn btn-hivis" onclick="saveEditJob('${id}')">Save Changes</button>
+    <button class="link-btn" onclick="go('qr/${id}')" style="display:block;margin:12px auto">Cancel</button>`;
+  initAddressAutocomplete('eAddress', 'eCountry', p => {
+    editPin = {lat:p.lat, lng:p.lng};
+    $('eAddress').value = p.address;
+    $('ePin').innerHTML = `<span class="gps-ok">✓ Set from address</span> ${p.lat}, ${p.lng} · <a href="${mapsLink(p.lat,p.lng)}" target="_blank" style="color:inherit">View on map ↗</a>`;
+    movePinMap(editMapInstance, p.lat, p.lng);
+  });
+  editMapInstance = initPinMap('ePinMap', editPin?.lat, editPin?.lng, pos => {
+    editPin = pos;
+    $('ePin').innerHTML = `<span class="gps-ok">✓ Pinned</span> ${pos.lat}, ${pos.lng} · <a href="${mapsLink(pos.lat,pos.lng)}" target="_blank" style="color:inherit">View on map ↗</a>`;
+  });
+}
+async function pinEdit() {
+  $('ePin').innerHTML = '<span class="spinner"></span> Getting GPS fix…';
+  try {
+    editPin = await getGPS();
+    $('ePin').innerHTML = `<span class="gps-ok">✓ Pinned</span> ${editPin.lat}, ${editPin.lng} · <a href="${mapsLink(editPin.lat,editPin.lng)}" target="_blank" style="color:inherit">View on map ↗</a>`;
+    movePinMap(editMapInstance, editPin.lat, editPin.lng);
+  } catch (e) { $('ePin').textContent = e.message; }
+}
+function saveEditJob(id) {
+  const name = $('eJobName').value.trim();
+  if (!name) return toast('Job needs a name');
+  const j = jobs[id];
+  const brandVal = $('eBrand').value;
+  saveJob(id, {...j, name,
+    cause: $('eCause').value.trim(), date: $('eDate').value,
+    address: $('eAddress').value.trim(), directions: $('eDirections').value.trim(), notes: $('eNotes').value.trim(),
+    lat: editPin ? editPin.lat : (j.lat ?? null), lng: editPin ? editPin.lng : (j.lng ?? null),
+    brandId: brandVal || null, brandName: brandVal ? brands[brandVal].name : 'EARNT'});
+  toast('Job updated');
+  go('qr/' + id);
+}
+
 function renderCause(app, id) {
   const j = jobs[id];
   if (!j) { app.innerHTML = '<div class="card" style="margin-top:20px">Job not found.</div>'; return; }
