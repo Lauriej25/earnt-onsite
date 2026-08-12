@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>EARNT · On Site</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root{
+    --ink:#0B0B0A; --paper:#FAFAF7; --card:#F4F3EE; --line:#E6E5DF; --muted:#6F6E67;
+    --hivis:#FFD500; --go:#0E7A3D; --go-light:#E7F4EA; --stop:#B3261E; --stop-light:#FBEAE8;
+    --pending:#B8760A; --pending-light:#FFF3D6; --white:#FFFFFF; --radius:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html{font-size:16px}
+  body{font-family:'Archivo',system-ui,sans-serif;background:var(--paper);color:var(--ink);min-height:100vh}
+  .wrap{max-width:520px;margin:0 auto;padding:0 16px 96px}
+  header{position:sticky;top:0;z-index:20;background:var(--ink);color:#fff;padding:14px 16px;
+    display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .wordmark{font-family:'Archivo Black';font-size:1.1rem;letter-spacing:.06em;cursor:pointer;user-select:none;white-space:nowrap}
+  .wordmark span{color:var(--hivis)}
+  .hdr-sub{font-family:'IBM Plex Mono';font-size:.6rem;letter-spacing:.12em;color:#bdbcb4;text-transform:uppercase}
+  .role-pill{font-family:'IBM Plex Mono';font-size:.58rem;background:var(--hivis);color:var(--ink);
+    padding:4px 9px;border-radius:99px;font-weight:600;letter-spacing:.05em;white-space:nowrap}
+  .back-btn{background:none;border:none;color:#fff;font-size:1.3rem;line-height:1;cursor:pointer;
+    padding:4px 6px 4px 0;flex-shrink:0}
+  .legend-box{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;
+    margin-bottom:12px;font-size:.74rem;line-height:1.5}
+  .legend-box b{display:block;font-family:'IBM Plex Mono';font-size:.58rem;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+  .addr-row{display:flex;gap:8px}
+  .addr-row select{border:1px solid var(--line);border-radius:10px;padding:0 8px;font-family:'Archivo';
+    font-size:.78rem;background:#fff;color:var(--ink)}
+  h1{font-family:'Archivo Black';font-size:1.6rem;line-height:1.08;text-transform:uppercase}
+  h2{font-family:'Archivo Black';font-size:1rem;text-transform:uppercase;letter-spacing:.03em;margin-bottom:10px}
+  .eyebrow{font-family:'IBM Plex Mono';font-size:.6rem;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+  .mono{font-family:'IBM Plex Mono'}
+  .muted{color:var(--muted)}
+  .card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px}
+  .job-item{display:block;width:100%;text-align:left;background:#fff;border:1px solid var(--line);
+    border-radius:var(--radius);padding:16px;margin-bottom:10px;cursor:pointer;font-family:inherit}
+  .job-item .name{font-weight:700;font-size:1rem}
+  .job-item .meta{font-family:'IBM Plex Mono';font-size:.66rem;color:var(--muted);margin-top:4px}
+  .status-chip{display:inline-block;font-family:'IBM Plex Mono';font-size:.58rem;font-weight:600;
+    letter-spacing:.07em;text-transform:uppercase;padding:3px 8px;border-radius:4px;margin-top:8px}
+  .chip-open{background:#eeede6;color:var(--muted)}
+  .chip-live{background:var(--hivis);color:var(--ink)}
+  .chip-done{background:var(--ink);color:#fff}
+  .chip-pending{background:var(--pending);color:#fff}
+  .btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
+    font-family:'Archivo Black';font-size:.95rem;text-transform:uppercase;letter-spacing:.03em;
+    padding:15px;border-radius:var(--radius);border:none;cursor:pointer;color:var(--ink)}
+  .btn:active{transform:scale(.985)}
+  .btn:disabled{opacity:.45;cursor:default}
+  .btn-hivis{background:var(--hivis)}
+  .btn-ink{background:var(--ink);color:#fff}
+  .btn-ghost{background:transparent;border:1.5px solid var(--ink)}
+  .btn-sm{font-family:'Archivo';font-weight:600;font-size:.78rem;padding:10px 14px;width:auto;border-radius:10px}
+  .btn-row{display:flex;gap:10px}
+  .link-btn{background:none;border:none;font-family:'IBM Plex Mono';font-size:.68rem;
+    text-decoration:underline;color:var(--muted);cursor:pointer;padding:6px 0}
+  label{display:block;font-family:'IBM Plex Mono';font-size:.6rem;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--muted);margin:14px 0 6px}
+  input[type=text],input[type=email],input[type=date],input[type=password],input[type=number],textarea{
+    width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;
+    font-family:'Archivo';font-size:1rem;background:#fff;color:var(--ink)}
+  input:focus,textarea:focus{outline:2px solid var(--ink);outline-offset:1px}
+  textarea{resize:vertical;min-height:70px}
+  .radio-row{display:flex;gap:10px;margin-top:6px}
+  .radio-opt{flex:1;border:1.5px solid var(--line);border-radius:10px;padding:12px;cursor:pointer;text-align:center}
+  .radio-opt.sel{border-color:var(--ink);background:var(--card)}
+  .radio-opt .ro-t{font-weight:700;font-size:.85rem}
+  .radio-opt .ro-s{font-family:'IBM Plex Mono';font-size:.6rem;color:var(--muted);margin-top:3px}
+  .docket{background:#fff;border:1.5px solid var(--ink);border-radius:var(--radius);overflow:hidden;margin-bottom:14px}
+  .docket-band{background:var(--ink);color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center}
+  .docket-band.live{background:var(--hivis);color:var(--ink)}
+  .docket-band .band-label{font-family:'Archivo Black';font-size:.78rem;letter-spacing:.08em;text-transform:uppercase}
+  .docket-band .band-time{font-family:'IBM Plex Mono';font-size:.76rem;font-weight:600}
+  .docket-body{padding:16px}
+  .stamp-row{display:flex;gap:12px;margin-bottom:4px}
+  .stamp{flex:1;border:1px dashed var(--line);border-radius:10px;padding:10px 12px}
+  .stamp .s-label{font-family:'IBM Plex Mono';font-size:.56rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .stamp .s-time{font-family:'IBM Plex Mono';font-size:1rem;font-weight:600;margin-top:3px}
+  .stamp .s-gps{font-family:'IBM Plex Mono';font-size:.58rem;color:var(--muted);margin-top:3px;word-break:break-all}
+  .stamp.filled{border-style:solid;border-color:var(--ink)}
+  .gps-ok{color:var(--go);font-weight:600}
+  .pulse{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--go);margin-right:6px;animation:pulse 1.6s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+  @media (prefers-reduced-motion: reduce){.pulse{animation:none}}
+  .phase-tabs{display:flex;gap:6px;margin-bottom:12px}
+  .phase-tab{flex:1;font-family:'Archivo';font-weight:600;font-size:.74rem;text-transform:uppercase;
+    letter-spacing:.04em;padding:9px 0;border-radius:8px;border:1.5px solid var(--ink);background:#fff;color:var(--ink);cursor:pointer}
+  .phase-tab.active{background:var(--ink);color:#fff}
+  .photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  .photo-grid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:pointer}
+  .add-photo{aspect-ratio:1;border:1.5px dashed var(--ink);border-radius:8px;background:none;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;
+    font-family:'IBM Plex Mono';font-size:.58rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink)}
+  .add-photo svg{width:20px;height:20px}
+  .qr-card{background:#fff;border:2px solid var(--ink);border-radius:var(--radius);padding:30px 22px;text-align:center;margin:18px 0}
+  .qr-card .qr-eyebrow{font-family:'Archivo Black';font-size:.8rem;letter-spacing:.08em;text-transform:uppercase}
+  .qr-card h1{margin:8px 0 2px}
+  .qr-card .qr-sub{font-family:'IBM Plex Mono';font-size:.68rem;color:var(--muted);margin-bottom:18px}
+  .qr-box{display:inline-block;padding:14px;background:#fff;border:1px solid var(--line);border-radius:12px}
+  .qr-instruction{font-family:'Archivo Black';font-size:1.05rem;text-transform:uppercase;letter-spacing:.02em;margin-top:16px}
+  .qr-footer{font-family:'IBM Plex Mono';font-size:.6rem;color:var(--muted);margin-top:12px;text-transform:uppercase;letter-spacing:.06em}
+  .pending-card{background:var(--pending-light);border:1.5px dashed var(--pending);border-radius:var(--radius);padding:20px;text-align:center;margin:18px 0}
+  .pending-card .p-icon{font-size:1.5rem}
+  .static-field{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:6px}
+  .static-field .sf-label{font-family:'IBM Plex Mono';font-size:.56rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+  .static-field .sf-value{font-size:.85rem;margin-top:2px}
+  .roster-row{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}
+  .roster-row .rr-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .roster-row .rr-name{font-weight:700;font-size:.9rem}
+  .roster-row .rr-time{font-family:'IBM Plex Mono';font-size:.66rem;color:var(--muted);margin-top:3px}
+  .roster-photos{display:flex;gap:6px;margin-top:8px}
+  .roster-photos img{width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid var(--line);cursor:pointer}
+  .badge{display:inline-flex;align-items:center;gap:4px;font-family:'IBM Plex Mono';font-size:.58rem;font-weight:600;
+    letter-spacing:.05em;text-transform:uppercase;padding:4px 8px;border-radius:99px}
+  .badge-verified{background:var(--go-light);color:var(--go)}
+  .badge-unverified{background:#eeede6;color:var(--muted)}
+  .badge-released{background:var(--hivis);color:var(--ink)}
+  .toggle-btn{font-family:'IBM Plex Mono';font-size:.62rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+    padding:7px 10px;border-radius:8px;border:1.5px solid var(--ink);background:#fff;color:var(--ink);cursor:pointer}
+  .toggle-btn.on{background:var(--go);border-color:var(--go);color:#fff}
+  .toggle-btn.reward.on{background:var(--hivis);border-color:var(--hivis);color:var(--ink)}
+  .code-box{background:var(--ink);color:var(--hivis);font-family:'IBM Plex Mono';font-size:1.3rem;font-weight:700;
+    letter-spacing:.15em;text-align:center;padding:16px;border-radius:10px;margin:10px 0}
+  .brand-row{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding:10px 0}
+  .brand-row:last-child{border-bottom:none}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;
+    font-family:'IBM Plex Mono';font-size:.72rem;padding:10px 16px;border-radius:99px;z-index:50;
+    opacity:0;transition:opacity .25s;pointer-events:none;max-width:90vw;text-align:center}
+  .toast.show{opacity:1}
+  .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:60;display:none;flex-direction:column;
+    align-items:center;justify-content:center;padding:20px}
+  .lightbox.open{display:flex}
+  .lightbox img{max-width:100%;max-height:80vh;border-radius:10px}
+  .lightbox .lb-meta{font-family:'IBM Plex Mono';font-size:.66rem;color:#ccc;margin-top:12px;text-align:center}
+  .lightbox .lb-close{position:absolute;top:16px;right:16px;background:#fff;border:none;width:38px;height:38px;
+    border-radius:50%;font-size:1.1rem;cursor:pointer}
+  .banner{background:var(--hivis);border-radius:10px;padding:10px 14px;font-size:.78rem;font-weight:600;margin:14px 0}
+  .spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(0,0,0,.2);border-top-color:var(--ink);
+    border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .footer-mark{text-align:center;font-family:'IBM Plex Mono';font-size:.58rem;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--muted);padding:26px 0 10px}
+  .hidden{display:none !important}
+  @media print{
+    header,.no-print{display:none !important}
+    body{background:#fff}
+    .wrap{max-width:100%;padding:0;margin:0}
+    .qr-card{border-width:3px;margin:0;box-shadow:none;page-break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+<header>
+  <button class="back-btn no-print" id="backBtn" onclick="goBack()" aria-label="Back">‹</button>
+  <div style="flex:1;min-width:0">
+    <div class="wordmark" onclick="go('')">EARNT<span>·</span>ON SITE</div>
+    <div class="hdr-sub" id="hdrSub">Volunteer check-in</div>
+  </div>
+  <div id="hdrRight"></div>
+</header>
+<div class="wrap" id="app"></div>
+<div class="toast" id="toast"></div>
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <button class="lb-close" aria-label="Close">✕</button>
+  <img id="lbImg" alt="Job photo">
+  <div class="lb-meta" id="lbMeta"></div>
+</div>
+<input type="file" accept="image/*" capture="environment" multiple id="photoInput" class="hidden">
+
+<script>
+/* =========================================================
+   EARNT · ON SITE — unified build
+   Roles: EARNT (platform admin) · Brand · Cause · Volunteer
+   ---------------------------------------------------------
+   SETUP: paste a Firebase Realtime Database config below to
+   go live. Until then this runs in DEMO MODE with seed data.
+   ========================================================= */
+   
+const FIREBASE_CONFIG = // Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyC_UpXLInJ8y7Jetl5SlV68k6tAvDZ_Y68",
+  authDomain: "earnt-onsite.firebaseapp.com",
+  projectId: "earnt-onsite",
+  storageBucket: "earnt-onsite.firebasestorage.app",
+  messagingSenderId: "1063977833836",
+  appId: "1:1063977833836:web:a0f3de970b714368bccf49"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig); /* e.g.
+const FIREBASE_CONFIG = { apiKey:"...", databaseURL:"https://YOUR-PROJECT.firebaseio.com", projectId:"..." }; */
+
+/* Paste a Google Maps Platform API key (with the Places API enabled) here to turn on
+   predictive address search. Without it, address fields still work as plain text —
+   they just won't autocomplete. https://console.cloud.google.com/google/maps-apis */
+   
+const GOOGLE_MAPS_API_KEY = null;
+let mapsReady = false;
+function loadGoogleMaps() {
+  if (!GOOGLE_MAPS_API_KEY || window.google) return;
+  const s = document.createElement('script');
+  s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&callback=onMapsReady`;
+  s.async = true;
+  document.head.appendChild(s);
+}
+window.onMapsReady = () => { mapsReady = true; render(); };
+loadGoogleMaps();
+
+const COUNTRY_OPTIONS = [
+  ['gb','United Kingdom'], ['ie','Ireland'], ['us','United States'],
+  ['au','Australia'], ['ca','Canada'], ['any','Other / worldwide']
+];
+function countrySelectHTML(id, selected) {
+  return `<select id="${id}" onchange="onCountryChange()">${COUNTRY_OPTIONS.map(([code,label]) =>
+    `<option value="${code}" ${code===selected?'selected':''}>${label}</option>`).join('')}</select>`;
+}
+function isValidEmail(s) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((s||'').trim()); }
+let activeAutocomplete = null;
+function initAddressAutocomplete(inputId, countryId, onPlace) {
+  activeAutocomplete = {inputId, countryId, onPlace};
+  if (!mapsReady || !window.google || !google.maps || !google.maps.places) return;
+  const input = $(inputId); if (!input) return;
+  const country = $(countryId) ? $(countryId).value : 'gb';
+  const opts = {fields:['formatted_address','geometry']};
+  if (country !== 'any') opts.componentRestrictions = {country};
+  const ac = new google.maps.places.Autocomplete(input, opts);
+  ac.addListener('place_changed', () => {
+    const place = ac.getPlace();
+    if (place && place.geometry) onPlace({address: place.formatted_address, lat: place.geometry.location.lat(), lng: place.geometry.location.lng()});
+  });
+}
+function onCountryChange() {
+  if (activeAutocomplete) initAddressAutocomplete(activeAutocomplete.inputId, activeAutocomplete.countryId, activeAutocomplete.onPlace);
+}
+
+/* Demo admin passcode: earnt2026
+   Demo brand "The Brown Dog" access code: BROWNDOG1
+   To change either: run setPasscode('newcode') in the console and
+   paste the printed hash over the matching *_HASH constant below. */
+const ADMIN_HASH = '50848f637d55a1ce659682513fa030a19ae9d5f1d85bf0aa76424bc5581f480d';
+
+const DEMO = !FIREBASE_CONFIG;
+let db = null;
+let jobs = {};
+let brands = {};
+
+let isAdmin = false, adminGateOpen = false;
+let currentBrandId = null, brandGateOpen = false;
+let volunteerName = null;
+let currentPhase = 'before';
+let activeJobId = null;
+let captureIntent = 'gallery'; // 'gallery' | 'checkin' | 'checkout'
+let pendingCheckin = null;
+let pendingCheckout = null;
+let pendingPin = null;
+let hostChoice = 'cause'; // 'cause' | 'self' — used on the New Job form
+
+/* ---------- data layer ---------- */
+if (!DEMO) {
+  firebase.initializeApp(FIREBASE_CONFIG);
+  db = firebase.database();
+  db.ref('jobs').on('value', s => { jobs = s.val() || {}; render(); });
+  db.ref('brands').on('value', s => { brands = s.val() || {}; render(); });
+} else {
+  const now = Date.now();
+  brands = {
+    brand1: { name: 'The Brown Dog', contact: 'events@thebrowndog.co.uk', codeHash: '0d585079d0559e155d1daa89c75195d004506ee824fbaa9f636ce68b63b1f405', createdAt: now - 9000000 }
+  };
+  jobs = {
+    demo1: {
+      brandId: 'brand1', brandName: 'The Brown Dog',
+      name: 'Community Garden Rebuild', cause: 'Albion Community Garden',
+      date: new Date().toISOString().slice(0,10), address: 'Barnes, London',
+      notes: 'Clear beds, repaint planters, lay new bark chip.',
+      lat: 51.4816, lng: -0.2251,
+      hostedBy: 'cause', status: 'confirmed',
+      createdAt: now - 86400000, confirmedAt: now - 80000000,
+      checkins: {
+        v1: { name: 'Alex Turner', inAt: now - 14400000, inLat: 51.4817, inLng: -0.2250, inAcc: 12, inPhotoId: 'p1',
+              outAt: now - 400000, outLat: 51.4817, outLng: -0.2250, outAcc: 10, outPhotoId: 'p2', verified: true, verifiedAt: now - 300000, rewardReleased: false }
+      },
+      photos: {
+        p1: { phase: 'proof-in', data: '', at: now - 14400000, by: 'Alex Turner', lat: 51.4817, lng: -0.2250 },
+        p2: { phase: 'proof-out', data: '', at: now - 400000, by: 'Alex Turner', lat: 51.4817, lng: -0.2250 }
+      }
+    },
+    demo2: {
+      brandId: 'brand1', brandName: 'The Brown Dog',
+      name: 'Riverside Litter Clean-up', cause: 'River Thames Foreshore',
+      date: new Date(now + 86400000*3).toISOString().slice(0,10), address: 'Putney Embankment',
+      notes: 'Two-hour litter pick along the tow path, bags and pickers provided.',
+      causeContactName: 'Jo Fenwick', causeContactEmail: 'jo@thepelicanpub.co.uk',
+      lat: null, lng: null,
+      hostedBy: 'cause', status: 'awaiting_cause',
+      createdAt: now - 3600000,
+      checkins: {}, photos: {}
+    }
+  };
+  document.getElementById('hdrRight').innerHTML = '<span class="role-pill">DEMO MODE</span>';
+}
+
+function saveJob(id, job) { if (DEMO) { jobs[id] = job; render(); } else db.ref('jobs/' + id).set(job); }
+function updatePath(path, val) {
+  if (DEMO) {
+    const keys = path.split('/'); let o = jobs;
+    for (let i = 0; i < keys.length - 1; i++) { o[keys[i]] = o[keys[i]] || {}; o = o[keys[i]]; }
+    o[keys[keys.length - 1]] = val; render();
+  } else db.ref('jobs/' + path).set(val);
+}
+function pushPath(path, val) {
+  if (DEMO) { const id = 'k' + Math.random().toString(36).slice(2, 9); updatePath(path + '/' + id, val); return id; }
+  const ref = db.ref('jobs/' + path).push(); ref.set(val); return ref.key;
+}
+function newId() { return DEMO ? 'j' + Math.random().toString(36).slice(2, 9) : db.ref('jobs').push().key; }
+function deleteJob(id) { if (DEMO) { delete jobs[id]; render(); } else db.ref('jobs/' + id).remove(); }
+function saveBrand(id, b) { if (DEMO) { brands[id] = b; render(); } else db.ref('brands/' + id).set(b); }
+function newBrandId() { return DEMO ? 'b' + Math.random().toString(36).slice(2, 9) : db.ref('brands').push().key; }
+
+/* ---------- helpers ---------- */
+const $ = id => document.getElementById(id);
+const esc = s => (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(msg, ms = 2600) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), ms); }
+function fmtTime(ts) { return new Date(ts).toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}); }
+function fmtDate(ts) { return new Date(ts).toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'short'}); }
+function fmtDur(ms) { const m = Math.round(ms/60000); return m < 60 ? m+' min' : Math.floor(m/60)+'h '+String(m%60).padStart(2,'0')+'m'; }
+function haversine(la1, lo1, la2, lo2) {
+  const R = 6371000, r = d => d*Math.PI/180;
+  const a = Math.sin(r(la2-la1)/2)**2 + Math.cos(r(la1))*Math.cos(r(la2))*Math.sin(r(lo2-lo1)/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+function getGPS() {
+  return new Promise((res, rej) => {
+    if (!navigator.geolocation) return rej(new Error('No GPS available on this device'));
+    navigator.geolocation.getCurrentPosition(
+      p => res({lat:+p.coords.latitude.toFixed(6), lng:+p.coords.longitude.toFixed(6), acc:Math.round(p.coords.accuracy)}),
+      e => rej(new Error(e.code === 1 ? 'Location permission denied — enable it in your browser settings' : 'Could not get location')),
+      {enableHighAccuracy:true, timeout:15000, maximumAge:0}
+    );
+  });
+}
+function jobStage(job) { return job.status || 'confirmed'; }
+function jobActivity(job) {
+  const cis = Object.values(job.checkins || {});
+  if (cis.some(c => c.inAt && !c.outAt)) return 'live';
+  return 'open';
+}
+function checkinUrl(id) { return location.origin + location.pathname + '#job/' + id; }
+function causeUrl(id) { return location.origin + location.pathname + '#cause/' + id; }
+function mapsLink(lat, lng) { return 'https://www.google.com/maps?q=' + lat + ',' + lng; }
+function copyLink(url) { navigator.clipboard.writeText(url).then(() => toast('Link copied')).catch(() => toast(url, 5000)); }
+function gpsLine(job, lat, lng) {
+  if (job.lat == null || lat == null) return lat != null ? lat + ', ' + lng : '';
+  const d = Math.round(haversine(job.lat, job.lng, lat, lng));
+  return lat + ', ' + lng + (d <= 150 ? ` · <span class="gps-ok">✓ ${d}m from site</span>` : ` · ${d}m from site`);
+}
+
+/* ---------- auth: EARNT admin ---------- */
+async function sha256(s) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+async function tryUnlockAdmin() {
+  const v = $('adminPass').value.trim(); if (!v) return;
+  if (await sha256(v) === ADMIN_HASH) {
+    isAdmin = true; currentBrandId = null; adminGateOpen = false;
+    sessionStorage.setItem('earnt_session', JSON.stringify({role:'admin'}));
+    toast('EARNT admin unlocked'); render();
+  } else { toast('Wrong passcode'); $('adminPass').value = ''; }
+}
+function lockAdmin() { isAdmin = false; sessionStorage.removeItem('earnt_session'); toast('Locked'); go(''); }
+function toggleAdminGate() { adminGateOpen = !adminGateOpen; brandGateOpen = false; render(); }
+async function setPasscode(s) { console.log("Hash: " + await sha256(s)); return 'Hash printed above.'; }
+
+/* ---------- auth: Brand ---------- */
+async function tryUnlockBrand() {
+  const v = $('brandCode').value.trim(); if (!v) return;
+  const hash = await sha256(v);
+  const match = Object.keys(brands).find(id => brands[id].codeHash === hash);
+  if (match) {
+    currentBrandId = match; isAdmin = false; brandGateOpen = false;
+    sessionStorage.setItem('earnt_session', JSON.stringify({role:'brand', brandId:match}));
+    toast('Signed in as ' + brands[match].name); render();
+  } else { toast('Access code not recognised'); $('brandCode').value = ''; }
+}
+function lockBrand() { currentBrandId = null; sessionStorage.removeItem('earnt_session'); toast('Signed out'); go(''); }
+function restoreSession() {
+  try {
+    const raw = sessionStorage.getItem('earnt_session');
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    if (s.role === 'admin') isAdmin = true;
+    else if (s.role === 'brand' && s.brandId) currentBrandId = s.brandId;
+  } catch (_) {}
+}
+function toggleBrandGate() { brandGateOpen = !brandGateOpen; adminGateOpen = false; render(); }
+function generateCode(len = 8) {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = '';
+  for (let i = 0; i < len; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+let lastGeneratedCode = null;
+let resetCodeShown = null, resetCodeShown_value = null;
+async function createBrand() {
+  const name = $('nbName').value.trim(), contact = $('nbContact').value.trim();
+  if (!name) return toast('Give the brand a name');
+  if (contact && !isValidEmail(contact)) return toast('That doesn\'t look like a valid email address');
+  const code = generateCode();
+  const hash = await sha256(code);
+  const id = newBrandId();
+  saveBrand(id, { name, contact, codeHash: hash, createdAt: Date.now() });
+  lastGeneratedCode = { name, code };
+  resetCodeShown = null;
+  $('nbName').value = ''; $('nbContact').value = '';
+  render();
+}
+async function resetBrandCode(id) {
+  if (!confirm('Reset the access code for ' + brands[id].name + '? Their old code will stop working immediately.')) return;
+  const code = generateCode();
+  const hash = await sha256(code);
+  saveBrand(id, {...brands[id], codeHash: hash});
+  lastGeneratedCode = null;
+  resetCodeShown = id; resetCodeShown_value = code;
+  render();
+}
+
+/* ---------- photo capture & compression ---------- */
+function capturePhotos(jobId, phase) {
+  captureIntent = 'gallery'; currentPhase = phase; activeJobId = jobId;
+  $('photoInput').value = ''; $('photoInput').click();
+}
+function compress(file) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 1280; let {width:w, height:h} = img;
+      if (Math.max(w,h) > MAX) { const s = MAX/Math.max(w,h); w = Math.round(w*s); h = Math.round(h*s); }
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(img.src);
+      res(c.toDataURL('image/jpeg', 0.72));
+    };
+    img.onerror = () => rej(new Error('unreadable image'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+$('photoInput').addEventListener('change', async e => {
+  const files = [...e.target.files];
+
+  if (captureIntent === 'checkin') {
+    if (!files.length || !pendingCheckin) { toast('A photo is required to check in — tap Check In to try again'); pendingCheckin = null; captureIntent = 'gallery'; render(); return; }
+    const {jobId, name, gps} = pendingCheckin;
+    try {
+      const data = await compress(files[0]);
+      const photoId = pushPath(jobId + '/photos', {phase:'proof-in', data, at:Date.now(), by:name, lat:gps.lat, lng:gps.lng});
+      pushPath(jobId + '/checkins', {name, inAt:Date.now(), inLat:gps.lat, inLng:gps.lng, inAcc:gps.acc, inPhotoId:photoId, outAt:null, verified:false, rewardReleased:false});
+      toast('Checked in ✓ Photo & location logged');
+    } catch (err) { toast('Photo failed: ' + err.message); }
+    pendingCheckin = null; captureIntent = 'gallery'; render(); return;
+  }
+
+  if (captureIntent === 'checkout') {
+    if (!files.length || !pendingCheckout) { toast('A photo is required to check out — tap Check Out to try again'); pendingCheckout = null; captureIntent = 'gallery'; render(); return; }
+    const {jobId, key, gps} = pendingCheckout;
+    try {
+      const data = await compress(files[0]);
+      const c = jobs[jobId].checkins[key];
+      const photoId = pushPath(jobId + '/photos', {phase:'proof-out', data, at:Date.now(), by:c.name, lat:gps.lat, lng:gps.lng});
+      updatePath(jobId + '/checkins/' + key, {...c, outAt:Date.now(), outLat:gps.lat, outLng:gps.lng, outAcc:gps.acc, outPhotoId:photoId});
+      toast('Checked out ✓ Nice work');
+    } catch (err) { toast('Photo failed: ' + err.message); }
+    pendingCheckout = null; captureIntent = 'gallery'; render(); return;
+  }
+
+  // gallery mode — Before / During / After story photos
+  if (!files.length) return;
+  toast('Processing ' + files.length + ' photo' + (files.length>1?'s':'') + '…', 8000);
+  let gps = null; try { gps = await getGPS(); } catch (_) {}
+  for (const f of files) {
+    try {
+      const data = await compress(f);
+      pushPath(activeJobId + '/photos', {phase:currentPhase, data, at:Date.now(), by:volunteerName||'Volunteer', lat:gps?gps.lat:null, lng:gps?gps.lng:null});
+    } catch (err) { toast('One photo failed: ' + err.message); }
+  }
+  toast('Added to ' + currentPhase.toUpperCase());
+});
+
+/* Safety net: some browsers never fire 'change' when the camera/file
+   picker is cancelled. Catch that by checking on window focus. */
+window.addEventListener('focus', () => {
+  setTimeout(() => {
+    if ((captureIntent === 'checkin' || captureIntent === 'checkout') && $('photoInput').files.length === 0) {
+      toast('Check-in needs a photo — tap Check In to try again'.replace('Check-in', captureIntent === 'checkout' ? 'Check-out' : 'Check-in'));
+      pendingCheckin = null; pendingCheckout = null; captureIntent = 'gallery'; render();
+    }
+  }, 400);
+});
+
+/* ---------- lightbox ---------- */
+function openLightbox(src, meta) { $('lbImg').src = src; $('lbMeta').textContent = meta; $('lightbox').classList.add('open'); }
+function closeLightbox() { $('lightbox').classList.remove('open'); }
+
+/* ---------- router ---------- */
+let navHistory = [];
+let currentRoute = null;
+let isGoingBack = false;
+function go(route) { location.hash = route; }
+function goBack() {
+  isGoingBack = true;
+  const prev = navHistory.pop();
+  const target = prev !== undefined ? prev : '';
+  if (('#' + target) === location.hash || (target === '' && !location.hash)) { isGoingBack = false; render(); }
+  else location.hash = target;
+}
+window.addEventListener('hashchange', render);
+
+function render() {
+  const h = location.hash.slice(1) || '';
+  if (currentRoute !== null && h !== currentRoute) {
+    if (!isGoingBack) navHistory.push(currentRoute);
+  }
+  isGoingBack = false;
+  currentRoute = h;
+  $('backBtn').style.visibility = navHistory.length ? 'visible' : 'hidden';
+
+  const app = $('app'); window.scrollTo(0,0);
+  updateHeaderRole();
+  if (h.startsWith('report/')) return renderReport(app, h.split('/')[1]);
+  if (h.startsWith('cause/'))  return renderCause(app, h.split('/')[1]);
+  if (h.startsWith('qr/'))     return renderQR(app, h.split('/')[1]);
+  if (h.startsWith('job/'))    return renderJob(app, h.split('/')[1]);
+  if (h === 'new')             return renderNew(app);
+  renderHome(app);
+}
+function updateHeaderRole() {
+  if (isAdmin) $('hdrRight').innerHTML = '<span class="role-pill">EARNT ADMIN</span>';
+  else if (currentBrandId && brands[currentBrandId]) $('hdrRight').innerHTML = `<span class="role-pill">${esc(brands[currentBrandId].name)}</span>`;
+  else if (DEMO) $('hdrRight').innerHTML = '<span class="role-pill">DEMO MODE</span>';
+  else $('hdrRight').innerHTML = '';
+}
+
+/* ---------- HOME ---------- */
+function renderHome(app) {
+  $('hdrSub').textContent = 'Volunteer check-in';
+  const chips = {
+    awaiting_cause: '<span class="status-chip chip-pending">Awaiting cause</span>',
+    completed: '<span class="status-chip chip-done">Complete</span>',
+    live: '<span class="status-chip chip-live">On site now</span>',
+    open: '<span class="status-chip chip-open">Not started</span>'
+  };
+  const chipFor = j => jobStage(j) === 'completed' ? chips.completed : jobStage(j) === 'awaiting_cause' ? chips.awaiting_cause : chips[jobActivity(j)];
+
+  let jobIds;
+  if (isAdmin) jobIds = Object.keys(jobs);
+  else if (currentBrandId) jobIds = Object.keys(jobs).filter(id => jobs[id].brandId === currentBrandId);
+  else jobIds = [];
+  const rank = j => jobStage(j) === 'awaiting_cause' ? 0 : jobStage(j) === 'completed' ? 3 : jobActivity(j) === 'live' ? 1 : 2;
+  jobIds.sort((a,b) => rank(jobs[a]) - rank(jobs[b]) || (jobs[b].createdAt||0) - (jobs[a].createdAt||0));
+
+  let body = '';
+  if (DEMO) body += '<div class="banner">Demo mode — data resets on refresh. EARNT passcode: earnt2026 · Brand code: BROWNDOG1<br>Add a Google Maps API key in the file to enable predictive address search.</div>';
+
+  if (isAdmin || currentBrandId) {
+    body += `<div style="margin:20px 0 14px"><div class="eyebrow">Actions speak louder than money</div><h1>${isAdmin ? 'All Jobs' : 'Your Jobs'}</h1></div>`;
+    body += jobIds.length ? jobIds.map(id => {
+      const j = jobs[id];
+      const vols = Object.values(j.checkins||{}).length;
+      const dest = jobStage(j) === 'awaiting_cause' ? 'cause/'+id : 'qr/'+id;
+      return `<button class="job-item" onclick="go('${dest}')">
+        <div class="name">${esc(j.name)}</div>
+        <div class="meta">${isAdmin ? esc(j.brandName||'EARNT') + ' · ' : ''}${esc(j.cause||'')}</div>
+        <div class="meta">${esc(j.date||'')}${vols ? ' · '+vols+' volunteer'+(vols>1?'s':'') : ''}</div>
+        ${chipFor(j)}
+      </button>`;
+    }).join('') : `<div class="card muted" style="text-align:center;padding:26px">No jobs yet.</div>`;
+    body += `<div style="margin-top:16px"><button class="btn btn-ghost" onclick="go('new')">+ New Job</button></div>`;
+
+    if (isAdmin) {
+      body += `<div style="margin-top:28px"><h2>Brand Accounts</h2></div><div class="card">`;
+      const bIds = Object.keys(brands);
+      body += bIds.length ? bIds.map(id => `<div class="brand-row"><div><div style="font-weight:700;font-size:.88rem">${esc(brands[id].name)}</div>
+        <div class="mono muted" style="font-size:.62rem">${esc(brands[id].contact||'')}</div>
+        ${resetCodeShown === id ? `<div class="code-box" style="margin:8px 0 0">${esc(resetCodeShown_value)}</div>
+          <div class="mono muted" style="font-size:.58rem">New code — share it now, it won't be shown again.</div>` : ''}
+        </div>
+        <button class="toggle-btn" onclick="resetBrandCode('${id}')">Reset Code</button></div>`).join('') : '<div class="muted" style="font-size:.82rem">No brand accounts yet.</div>';
+      body += `</div>
+        <div class="card">
+          <label style="margin-top:0">Brand name</label>
+          <input type="text" id="nbName" placeholder="e.g. The Pelican">
+          <label>Contact email</label>
+          <input type="email" id="nbContact" placeholder="events@thebrand.co.uk">
+          <div style="height:10px"></div>
+          <button class="btn btn-sm btn-ink" onclick="createBrand()">Create Brand Account</button>
+          ${lastGeneratedCode ? `<div class="code-box">${esc(lastGeneratedCode.code)}</div>
+            <div class="mono muted" style="font-size:.62rem;text-align:center">Share this code with ${esc(lastGeneratedCode.name)} directly — it won't be shown again.</div>` : ''}
+        </div>`;
+    }
+    body += `<button class="link-btn" style="display:block;margin:16px auto" onclick="${isAdmin?'lockAdmin()':'lockBrand()'}">Sign out</button>`;
+  } else {
+    body += `<div style="margin:20px 0 14px"><div class="eyebrow">Actions speak louder than money</div><h1>Welcome</h1></div>
+      <div class="card">
+        <div style="font-size:.85rem;margin-bottom:4px"><b>EARNT On Site</b> is the tool a Brand uses to set up a job, a Cause uses to confirm it and print the check-in QR, and volunteers use to check in with GPS and a photo — proof EARNT can review before releasing an Earned Thank You.</div>
+      </div>`;
+    body += `<div class="card" style="text-align:center">
+      <div class="mono muted" style="font-size:.7rem;margin-bottom:10px">Brand sign-in</div>
+      ${brandGateOpen ? `
+        <input type="password" id="brandCode" placeholder="Access code" autocomplete="off" onkeydown="if(event.key==='Enter')tryUnlockBrand()">
+        <div style="height:10px"></div>
+        <div class="btn-row"><button class="btn btn-sm btn-ink" style="flex:1" onclick="tryUnlockBrand()">Sign in</button>
+        <button class="btn btn-sm btn-ghost" style="flex:1" onclick="toggleBrandGate()">Cancel</button></div>`
+        : `<button class="btn btn-sm btn-ink" onclick="toggleBrandGate()">Sign in as a Brand</button>`}
+    </div>
+    <div class="card" style="text-align:center">
+      <div class="mono muted" style="font-size:.7rem;margin-bottom:10px">EARNT team</div>
+      ${adminGateOpen ? `
+        <input type="password" id="adminPass" placeholder="Admin passcode" autocomplete="off" onkeydown="if(event.key==='Enter')tryUnlockAdmin()">
+        <div style="height:10px"></div>
+        <div class="btn-row"><button class="btn btn-sm btn-ink" style="flex:1" onclick="tryUnlockAdmin()">Unlock</button>
+        <button class="btn btn-sm btn-ghost" style="flex:1" onclick="toggleAdminGate()">Cancel</button></div>`
+        : `<button class="btn btn-sm btn-ghost" onclick="toggleAdminGate()">EARNT admin sign-in</button>`}
+    </div>
+    <div class="mono muted" style="font-size:.66rem;text-align:center;margin-top:10px">Volunteer? You'll get here via a link or QR code from the Cause — no sign-in needed.</div>`;
+  }
+  body += `<div class="footer-mark">EARNT · Get good things done</div>`;
+  app.innerHTML = body;
+}
+
+/* ---------- NEW JOB (Brand or EARNT) ---------- */
+function renderNew(app) {
+  if (!isAdmin && !currentBrandId) { toast('Sign in to create a job'); go(''); return; }
+  $('hdrSub').textContent = 'New job';
+  hostChoice = 'cause';
+  pendingPin = null;
+  app.innerHTML = `
+    <div style="margin:20px 0 6px"><h1>New Job</h1></div>
+    <div class="card">
+      <label style="margin-top:0">Job name *</label>
+      <input type="text" id="nJobName" placeholder="e.g. Playground repaint">
+      <label>Cause / organisation *</label>
+      <input type="text" id="nCause" placeholder="e.g. Barnes Primary School">
+      <label>Date</label>
+      <input type="date" id="nDate" value="${new Date().toISOString().slice(0,10)}">
+      <label>Notes for volunteers</label>
+      <textarea id="nNotes" placeholder="What needs doing, what to bring…"></textarea>
+      <label>Who's hosting on the day?</label>
+      <div class="radio-row">
+        <div class="radio-opt sel" id="hostCause" onclick="setHost('cause')">
+          <div class="ro-t">The Cause</div><div class="ro-s">They confirm details &amp; print the QR</div>
+        </div>
+        <div class="radio-opt" id="hostSelf" onclick="setHost('self')">
+          <div class="ro-t">We are</div><div class="ro-s">Skip ahead, get the QR now</div>
+        </div>
+      </div>
+      <div id="causeFields">
+        <label>Cause contact name</label>
+        <input type="text" id="nCauseContactName" placeholder="Who EARNT/you will send the link to">
+        <label>Cause contact email</label>
+        <input type="email" id="nCauseContactEmail" placeholder="them@thecause.org">
+      </div>
+      <div id="selfFields" class="hidden">
+        <label>Site address</label>
+        <div class="addr-row">
+          <input type="text" id="nAddress" placeholder="Start typing an address…" style="flex:1">
+          ${countrySelectHTML('nCountry', 'gb')}
+        </div>
+        ${!mapsReady ? '<div class="mono muted" style="font-size:.6rem;margin-top:6px">Address autocomplete isn\'t configured yet — type the address manually.</div>' : ''}
+        <label>Directions / how to find us</label>
+        <textarea id="nDirections" placeholder="e.g. Enter via the side gate, no signage on the main door"></textarea>
+        <div class="btn-row" style="margin-top:6px">
+          <button class="btn btn-sm btn-ghost" style="flex:1" onclick="pinHere()">📍 Pin my current location</button>
+        </div>
+        <div class="mono muted" id="nPin" style="font-size:.66rem;margin-top:8px">${pendingPin ? `<span class="gps-ok">✓ Pinned</span> ${pendingPin.lat}, ${pendingPin.lng} · <a href="${mapsLink(pendingPin.lat,pendingPin.lng)}" target="_blank" style="color:inherit">View on map ↗</a>` : 'No pin yet — you can add one later too.'}</div>
+      </div>
+    </div>
+    <button class="btn btn-hivis" onclick="createJob()">Create Job</button>
+    <button class="link-btn" onclick="go('')" style="display:block;margin:12px auto">Cancel</button>`;
+  initAddressAutocomplete('nAddress', 'nCountry', p => {
+    pendingPin = {lat:p.lat, lng:p.lng};
+    $('nAddress').value = p.address;
+    $('nPin').innerHTML = `<span class="gps-ok">✓ Set from address</span> ${p.lat}, ${p.lng} · <a href="${mapsLink(p.lat,p.lng)}" target="_blank" style="color:inherit">View on map ↗</a>`;
+  });
+}
+function setHost(choice) {
+  hostChoice = choice;
+  $('hostCause').classList.toggle('sel', choice==='cause');
+  $('hostSelf').classList.toggle('sel', choice==='self');
+  $('causeFields').classList.toggle('hidden', choice!=='cause');
+  $('selfFields').classList.toggle('hidden', choice!=='self');
+}
+async function pinHere() {
+  $('nPin').innerHTML = '<span class="spinner"></span> Getting GPS fix…';
+  try { pendingPin = await getGPS(); $('nPin').innerHTML = `<span class="gps-ok">✓ Pinned</span> ${pendingPin.lat}, ${pendingPin.lng} · <a href="${mapsLink(pendingPin.lat,pendingPin.lng)}" target="_blank" style="color:inherit">View on map ↗</a>`; }
+  catch (e) { $('nPin').textContent = e.message; }
+}
+function createJob() {
+  const name = $('nJobName').value.trim(), cause = $('nCause').value.trim();
+  if (!name) return toast('Give the job a name');
+  if (!cause) return toast('Who is this job for?');
+  const id = newId();
+  const brandId = isAdmin ? null : currentBrandId;
+  const brandName = isAdmin ? 'EARNT' : brands[currentBrandId].name;
+  const base = {
+    brandId, brandName, name, cause,
+    date: $('nDate').value, notes: $('nNotes').value.trim(),
+    createdAt: Date.now(), checkins: {}, photos: {}
+  };
+  if (hostChoice === 'self') {
+    saveJob(id, {...base, hostedBy:'brand', status:'confirmed', confirmedAt:Date.now(),
+      address: $('nAddress').value.trim(), directions: $('nDirections').value.trim(),
+      lat: pendingPin?pendingPin.lat:null, lng: pendingPin?pendingPin.lng:null});
+    pendingPin = null;
+    toast('Job created — here\'s its QR code'); go('qr/' + id);
+  } else {
+    const causeEmail = $('nCauseContactEmail').value.trim();
+    if (causeEmail && !isValidEmail(causeEmail)) return toast('That doesn\'t look like a valid email address');
+    saveJob(id, {...base, hostedBy:'cause', status:'awaiting_cause',
+      causeContactName: $('nCauseContactName').value.trim(), causeContactEmail: causeEmail,
+      address:'', lat:null, lng:null});
+    toast('Job created — send it to the Cause to confirm'); go('cause/' + id);
+  }
+}
+
+/* ---------- CAUSE confirmation ---------- */
+function renderCause(app, id) {
+  const j = jobs[id];
+  if (!j) { app.innerHTML = '<div class="card" style="margin-top:20px">Job not found.</div>'; return; }
+  if (jobStage(j) !== 'awaiting_cause') { go('qr/' + id); return; }
+  $('hdrSub').textContent = 'Confirm job';
+  causePin = j.lat != null ? {lat:j.lat, lng:j.lng} : null;
+  app.innerHTML = `
+    <div style="margin:20px 0 6px">
+      <div class="eyebrow">${esc(j.brandName)} needs your help</div>
+      <h1>${esc(j.name)}</h1>
+    </div>
+    <div class="card muted" style="font-size:.82rem">${esc(j.brandName)} has set up this job for volunteers to come and help
+      ${esc(j.cause)}. Check the details, add your site's exact location, and confirm — you'll get a printable QR code
+      straight away for volunteers to scan and check in.</div>
+    <div class="card">
+      <label style="margin-top:0">Job name</label>
+      <input type="text" id="cJobName" value="${esc(j.name)}">
+      <label>Date</label>
+      <input type="date" id="cDate" value="${esc(j.date||'')}">
+      <label>Site address *</label>
+      <div class="addr-row">
+        <input type="text" id="cAddress" placeholder="Start typing an address…" value="${esc(j.address||'')}" style="flex:1">
+        ${countrySelectHTML('cCountry', 'gb')}
+      </div>
+      ${!mapsReady ? '<div class="mono muted" style="font-size:.6rem;margin-top:6px">Address autocomplete isn\'t configured yet — type the address manually, then pin your exact location below.</div>' : ''}
+      <label>Directions / how to find us</label>
+      <textarea id="cDirections" placeholder="e.g. Enter via the side gate, no signage on the main door">${esc(j.directions||'')}</textarea>
+      <label>Pin your exact location *</label>
+      <div class="btn-row"><button class="btn btn-sm btn-ghost" style="flex:1" onclick="pinCause()">📍 Pin current location</button></div>
+      <div class="mono muted" id="cPin" style="font-size:.66rem;margin-top:8px">${causePin ? `<span class="gps-ok">✓ Pinned</span> ${causePin.lat}, ${causePin.lng} · <a href="${mapsLink(causePin.lat,causePin.lng)}" target="_blank" style="color:inherit">View on map ↗</a>` : 'A location pin is required before you can confirm.'}</div>
+      <label>Notes for volunteers</label>
+      <textarea id="cNotes">${esc(j.notes||'')}</textarea>
+    </div>
+    <button class="btn btn-hivis" onclick="confirmCause('${id}')">Confirm &amp; Generate QR</button>
+    <button class="link-btn" onclick="declineCause('${id}')" style="display:block;margin:12px auto">Can't host this</button>`;
+  initAddressAutocomplete('cAddress', 'cCountry', p => {
+    causePin = {lat:p.lat, lng:p.lng};
+    $('cAddress').value = p.address;
+    $('cPin').innerHTML = `<span class="gps-ok">✓ Set from address</span> ${p.lat}, ${p.lng} · <a href="${mapsLink(p.lat,p.lng)}" target="_blank" style="color:inherit">View on map ↗</a>`;
+  });
+}
+let causePin = null;
+async function pinCause() {
+  $('cPin').innerHTML = '<span class="spinner"></span> Getting GPS fix…';
+  try { causePin = await getGPS(); $('cPin').innerHTML = `<span class="gps-ok">✓ Pinned</span> ${causePin.lat}, ${causePin.lng} · <a href="${mapsLink(causePin.lat,causePin.lng)}" target="_blank" style="color:inherit">View on map ↗</a>`; }
+  catch (e) { $('cPin').textContent = e.message; }
+}
+function confirmCause(id) {
+  const name = $('cJobName').value.trim();
+  if (!name) return toast('Job needs a name');
+  const address = $('cAddress').value.trim();
+  if (!address) return toast('Add a site address');
+  if (!causePin) return toast('Pin your exact location before confirming — tap "Pin current location" above');
+  const j = jobs[id];
+  saveJob(id, {...j, name, date: $('cDate').value, address, directions: $('cDirections').value.trim(), notes: $('cNotes').value.trim(),
+    lat: causePin.lat, lng: causePin.lng,
+    status:'confirmed', confirmedAt: Date.now()});
+  causePin = null;
+  toast('Confirmed — QR code ready'); go('qr/' + id);
+}
+function declineCause(id) {
+  if (!confirm('Let ' + (jobs[id].brandName||'the brand') + ' know you can\'t host this? This removes the job.')) return;
+  deleteJob(id); toast('Job removed'); go('');
+}
+
+/* ---------- QR / operations page (confirmed jobs) ---------- */
+function renderQR(app, id) {
+  const j = jobs[id];
+  if (!j) { app.innerHTML = '<div class="card" style="margin-top:20px">Job not found.</div>'; return; }
+  if (jobStage(j) === 'awaiting_cause') { go('cause/' + id); return; }
+  $('hdrSub').textContent = 'QR & roster';
+  const link = checkinUrl(id);
+  const photos = Object.entries(j.photos||{}).map(([k,v]) => ({id:k, ...v}));
+  const storyPhotos = p => photos.filter(x => x.phase===p).sort((a,b) => a.at-b.at);
+  const gallerySection = () => {
+    const phases = [['before','Before'],['during','During'],['after','After']];
+    const any = phases.some(([p]) => storyPhotos(p).length);
+    if (!any) return '';
+    return `<div class="card no-print"><h2>Photo Evidence</h2>${phases.map(([p,title]) => {
+      const list = storyPhotos(p); if (!list.length) return '';
+      return `<div class="mono muted" style="font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;margin:10px 0 6px">${title} (${list.length})</div>
+        <div class="photo-grid">${list.map(ph => `<img src="${ph.data}" loading="lazy" onclick="openLightbox(this.src,'${title.toUpperCase()} · ${fmtTime(ph.at)} · ${esc(ph.by)}')">`).join('')}</div>`;
+    }).join('')}</div>`;
+  };
+
+  app.innerHTML = `
+    <div class="qr-card" id="printCard">
+      <div class="qr-eyebrow">EARNT<span>·</span>CHECK IN</div>
+      <h1>${esc(j.name)}</h1>
+      <div class="qr-sub">${esc(j.brandName||'')}${j.brandName && j.cause ? ' × ' : ''}${esc(j.cause||'')}${j.date ? ' · '+esc(j.date) : ''}</div>
+      <div class="qr-box" id="qrcanvas"></div>
+      <div class="qr-instruction">Scan to check in</div>
+      <div class="qr-footer">${esc(j.address||'')}</div>
+      ${j.directions ? `<div class="qr-footer" style="margin-top:4px;text-transform:none;letter-spacing:0">${esc(j.directions)}</div>` : ''}
+    </div>
+    <button class="btn btn-hivis no-print" onclick="window.print()">Print QR Sign</button>
+    <div style="height:10px" class="no-print"></div>
+    <button class="btn btn-ghost no-print" onclick="copyLink('${link.replace(/'/g,"\\'")}')">Copy Check-in Link</button>
+    ${jobStage(j)!=='completed'
+      ? `<div style="height:10px" class="no-print"></div><button class="btn btn-ghost no-print" onclick="markComplete('${id}')">Mark Job Complete</button>`
+      : `<div style="height:10px" class="no-print"></div><button class="btn btn-ghost no-print" onclick="reopenJob('${id}')">Reopen Job</button>`}
+    ${isAdmin || (currentBrandId && j.brandId===currentBrandId) ? `<div style="height:10px" class="no-print"></div>
+    <button class="btn btn-ghost no-print" onclick="go('report/${id}')">View Client Report</button>` : ''}
+    <div class="no-print">${gallerySection()}</div>
+    <div class="no-print">${rosterSection(j, id, {canVerify:true, canRelease:isAdmin})}</div>
+    <button class="link-btn no-print" style="display:block;margin:12px auto" onclick="go('')">← All jobs</button>`;
+
+  const box = document.getElementById('qrcanvas'); box.innerHTML = '';
+  new QRCode(box, {text: link, width: 210, height: 210, colorDark:'#0B0B0A', colorLight:'#FFFFFF', correctLevel: QRCode.CorrectLevel.H});
+}
+function markComplete(id) {
+  const j = jobs[id];
+  const open = Object.values(j.checkins||{}).filter(c => !c.outAt).length;
+  const msg = open ? (open + ' volunteer(s) still checked in. Mark this job complete anyway?') : 'Mark this job as complete? You can reopen it later if needed.';
+  if (!confirm(msg)) return;
+  updatePath(id + '/status', 'completed'); updatePath(id + '/completedAt', Date.now());
+  toast('Job marked complete');
+}
+function reopenJob(id) {
+  if (!confirm('Reopen this job? Volunteers will be able to check in again.')) return;
+  updatePath(id + '/status', 'confirmed'); updatePath(id + '/completedAt', null);
+  toast('Job reopened');
+}
+
+/* ---------- roster (shared between QR page and report) ---------- */
+function rosterSection(j, id, opts) {
+  const cis = Object.entries(j.checkins||{}).sort((a,b) => a[1].inAt - b[1].inAt);
+  const legend = `<div class="legend-box"><b>Verified</b>The Cause has confirmed this check-in was genuine, based on the photo and location logged.
+    An Earned Thank You can't be marked released until it's verified.</div>`;
+  if (!cis.length) return `<div class="card"><h2>Roster</h2>${legend}<div class="muted" style="font-size:.82rem">No check-ins yet.</div></div>`;
+  const photos = j.photos||{};
+  return `<div class="card"><h2>Roster</h2>${legend}${cis.map(([key,c]) => {
+    const inP = c.inPhotoId && photos[c.inPhotoId], outP = c.outPhotoId && photos[c.outPhotoId];
+    return `<div class="roster-row">
+      <div class="rr-top">
+        <div><div class="rr-name">${esc(c.name)}</div>
+          <div class="rr-time">In ${fmtTime(c.inAt)}${c.outAt ? ' → Out '+fmtTime(c.outAt)+' ('+fmtDur(c.outAt-c.inAt)+')' : ' · <span class="gps-ok">on site</span>'}</div>
+          <div class="rr-time">${gpsLine(j, c.inLat, c.inLng)}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+          ${c.verified ? '<span class="badge badge-verified">✓ Verified</span>' : '<span class="badge badge-unverified">Unverified</span>'}
+          ${opts.canRelease && c.rewardReleased ? '<span class="badge badge-released">ETY released</span>' : ''}
+        </div>
+      </div>
+      ${(inP && inP.data) || (outP && outP.data) ? `<div class="roster-photos">
+        ${inP && inP.data ? `<img src="${inP.data}" onclick="openLightbox(this.src,'Check-in proof · ${fmtTime(c.inAt)}')">` : ''}
+        ${outP && outP.data ? `<img src="${outP.data}" onclick="openLightbox(this.src,'Check-out proof · ${fmtTime(c.outAt)}')">` : ''}
+      </div>` : ''}
+      <div class="btn-row" style="margin-top:10px">
+        ${opts.canVerify && c.outAt ? `<button class="toggle-btn ${c.verified?'on':''}" onclick="toggleVerified('${id}','${key}')">${c.verified?'✓ Verified':'Mark Verified'}</button>` : ''}
+        ${opts.canRelease && c.verified ? `<button class="toggle-btn reward ${c.rewardReleased?'on':''}" onclick="toggleReward('${id}','${key}')">${c.rewardReleased?'✓ ETY Released':'Mark ETY Released'}</button>` : ''}
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+function toggleVerified(jobId, key) {
+  const c = jobs[jobId].checkins[key];
+  updatePath(jobId + '/checkins/' + key, {...c, verified: !c.verified, verifiedAt: !c.verified ? Date.now() : null});
+}
+function toggleReward(jobId, key) {
+  const c = jobs[jobId].checkins[key];
+  if (!c.verified) return toast('Verify attendance before releasing an ETY');
+  updatePath(jobId + '/checkins/' + key, {...c, rewardReleased: !c.rewardReleased, rewardReleasedAt: !c.rewardReleased ? Date.now() : null});
+}
+
+/* ---------- VOLUNTEER check-in page ---------- */
+function renderJob(app, id) {
+  const j = jobs[id];
+  if (!j) { app.innerHTML = '<div class="card" style="margin-top:20px">Job not found.</div>'; return; }
+  const stage = jobStage(j);
+  if (stage === 'awaiting_cause') {
+    $('hdrSub').textContent = 'Not open yet';
+    app.innerHTML = `<div style="margin:20px 0 6px"><h1>${esc(j.name)}</h1></div>
+      <div class="pending-card"><div class="p-icon">⏳</div><div style="font-weight:700;margin-top:6px">This job isn't open for check-in yet</div>
+      <div class="mono muted" style="font-size:.7rem;margin-top:6px">It's still waiting on the Cause to confirm details.</div></div>
+      <button class="link-btn" style="display:block;margin:12px auto" onclick="go('')">← All jobs</button>`;
+    return;
+  }
+  if (stage === 'completed') {
+    $('hdrSub').textContent = 'Job complete';
+    app.innerHTML = `<div style="margin:20px 0 6px"><h1>${esc(j.name)}</h1></div>
+      <div class="pending-card"><div class="p-icon">✅</div><div style="font-weight:700;margin-top:6px">This job has been marked complete</div>
+      <div class="mono muted" style="font-size:.7rem;margin-top:6px">Check-in is closed. Thanks to everyone who helped.</div></div>
+      <button class="link-btn" style="display:block;margin:12px auto" onclick="go('')">← All jobs</button>`;
+    return;
+  }
+
+  $('hdrSub').textContent = esc(j.cause || 'Job');
+  const myKey = volunteerName ? Object.keys(j.checkins||{}).find(k => j.checkins[k].name===volunteerName && !j.checkins[k].outAt) : null;
+  const me = myKey ? j.checkins[myKey] : null;
+  const activity = jobActivity(j);
+  const photos = Object.entries(j.photos||{}).map(([k,v]) => ({id:k, ...v}));
+  const phasePhotos = p => photos.filter(x => x.phase===p).sort((a,b) => a.at-b.at);
+  const bandLabel = activity==='live' ? '<span class="pulse"></span>ON SITE' : 'READY TO START';
+
+  const phaseBlock = p => {
+    const list = phasePhotos(p);
+    return `<div class="photo-grid" ${currentPhase===p?'':'style="display:none"'} data-phase="${p}">
+      <button class="add-photo" onclick="capturePhotos('${id}','${p}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Add
+      </button>
+      ${list.map(ph => `<img src="${ph.data}" loading="lazy" alt="${p} photo" onclick="openLightbox(this.src,'${p.toUpperCase()} · ${fmtTime(ph.at)} · ${esc(ph.by)}')">`).join('')}
+    </div>`;
+  };
+
+  app.innerHTML = `
+    <div style="margin:18px 0 12px">
+      <div class="eyebrow">${esc(j.brandName||'')}${j.brandName && j.cause ? ' × ' : ''}${esc(j.cause||'')}</div>
+      <h1>${esc(j.name)}</h1>
+      <div class="mono muted" style="font-size:.68rem;margin-top:6px">
+        ${esc(j.date||'')}${j.address ? ' · '+esc(j.address) : ''}
+        ${j.lat ? ` · <a href="${mapsLink(j.lat,j.lng)}" target="_blank" style="color:inherit">Map ↗</a>` : ''}
+      </div>
+    </div>
+    ${j.notes ? `<div class="card" style="font-size:.85rem">${esc(j.notes)}</div>` : ''}
+    ${j.directions ? `<div class="card" style="font-size:.8rem"><div class="mono muted" style="font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">Finding us</div>${esc(j.directions)}</div>` : ''}
+    <div class="docket">
+      <div class="docket-band ${activity==='live'?'live':''}"><span class="band-label">${bandLabel}</span></div>
+      <div class="docket-body">
+        ${!volunteerName ? `<label style="margin-top:0">Your name</label>
+          <input type="text" id="volName" placeholder="First name + surname" autocomplete="name">
+          <div style="height:10px"></div>` : `
+          <div class="mono muted" style="font-size:.66rem;margin-bottom:10px">Signed in as <b style="color:var(--ink)">${esc(volunteerName)}</b>
+            <button class="link-btn" onclick="volunteerName=null;render()" style="padding:0 0 0 8px">change</button></div>`}
+        <div class="stamp-row">
+          <div class="stamp ${me&&me.inAt?'filled':''}"><div class="s-label">Check in</div><div class="s-time">${me&&me.inAt?fmtTime(me.inAt):'--:--'}</div>
+            <div class="s-gps">${me&&me.inLat?gpsLine(j,me.inLat,me.inLng):''}</div></div>
+          <div class="stamp ${me&&me.outAt?'filled':''}"><div class="s-label">Check out</div><div class="s-time">${me&&me.outAt?fmtTime(me.outAt):'--:--'}</div>
+            <div class="s-gps">${me&&me.outLat?gpsLine(j,me.outLat,me.outLng):''}</div></div>
+        </div>
+        <div class="mono muted" style="font-size:.64rem;margin:8px 0">A quick photo is needed to check in and out — it's what EARNT uses to verify the ETY reward.</div>
+        ${!me || !me.inAt
+          ? `<button class="btn btn-hivis" id="ciBtn" onclick="beginCheckIn('${id}')">Check In</button>`
+          : !me.outAt
+            ? `<button class="btn btn-ink" id="coBtn" onclick="beginCheckOut('${id}','${myKey}')">Check Out</button>`
+            : `<div class="mono" style="font-size:.74rem;text-align:center;padding:6px">✓ Shift logged — ${fmtDur(me.outAt-me.inAt)}. Thank you.</div>`}
+      </div>
+    </div>
+    <div class="card">
+      <h2>Photo Evidence</h2>
+      <div class="phase-tabs">${['before','during','after'].map(p => `<button class="phase-tab ${currentPhase===p?'active':''}" onclick="switchPhase('${p}')">${p}${phasePhotos(p).length?' ('+phasePhotos(p).length+')':''}</button>`).join('')}</div>
+      ${['before','during','after'].map(phaseBlock).join('')}
+    </div>
+    <button class="link-btn" style="display:block;margin:10px auto" onclick="go('')">← All jobs</button>`;
+}
+function switchPhase(p) { currentPhase = p; render(); }
+
+async function beginCheckIn(jobId) {
+  if (!volunteerName) { const v = $('volName') ? $('volName').value.trim() : ''; if (!v) return toast('Enter your name first'); volunteerName = v; }
+  const btn = $('ciBtn'); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Getting location…';
+  try {
+    const gps = await getGPS();
+    pendingCheckin = {jobId, name: volunteerName, gps};
+    captureIntent = 'checkin';
+    toast('Now take a quick photo to confirm you\u2019re on site', 4000);
+    $('photoInput').value = ''; $('photoInput').click();
+  } catch (e) { btn.disabled = false; btn.textContent = 'Check In'; toast(e.message, 4000); }
+}
+async function beginCheckOut(jobId, key) {
+  const btn = $('coBtn'); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Getting location…';
+  try {
+    const gps = await getGPS();
+    pendingCheckout = {jobId, key, gps};
+    captureIntent = 'checkout';
+    toast('One more photo to confirm check-out', 4000);
+    $('photoInput').value = ''; $('photoInput').click();
+  } catch (e) { btn.disabled = false; btn.textContent = 'Check Out'; toast(e.message, 4000); }
+}
+
+/* ---------- CLIENT REPORT ---------- */
+function renderReport(app, id) {
+  const j = jobs[id];
+  if (!j) { app.innerHTML = '<div class="card" style="margin-top:20px">Report not found.</div>'; return; }
+  $('hdrSub').textContent = 'Client report';
+  const photos = Object.entries(j.photos||{}).map(([k,v]) => ({id:k, ...v}));
+  const phasePhotos = p => photos.filter(x => x.phase===p).sort((a,b) => a.at-b.at);
+  const cis = Object.values(j.checkins||{});
+  const firstIn = cis.length ? Math.min(...cis.map(c => c.inAt)) : null;
+  const lastOut = cis.filter(c => c.outAt).length ? Math.max(...cis.filter(c => c.outAt).map(c => c.outAt)) : null;
+  const totalMs = cis.reduce((s,c) => s + (c.outAt ? c.outAt-c.inAt : 0), 0);
+  const verifiedCount = cis.filter(c => c.verified).length;
+
+  const section = (p, title) => {
+    const list = phasePhotos(p); if (!list.length) return '';
+    return `<div style="margin-bottom:18px"><div style="display:flex;justify-content:space-between;border-bottom:1.5px solid var(--ink);padding-bottom:6px;margin-bottom:10px"><h2 style="margin:0">${title}</h2>
+      <span class="mono muted" style="font-size:.66rem">${list.length} photo${list.length>1?'s':''}</span></div>
+      <div class="photo-grid" style="grid-template-columns:repeat(2,1fr)">${list.map(ph => `<img src="${ph.data}" loading="lazy" onclick="openLightbox(this.src,'${title.toUpperCase()} · ${fmtTime(ph.at)}')">`).join('')}</div></div>`;
+  };
+
+  app.innerHTML = `
+    <div style="background:var(--ink);color:#fff;border-radius:var(--radius);padding:22px 18px;margin:16px 0 14px">
+      <div class="eyebrow" style="color:#bdbcb4">${esc(j.brandName||'')}${j.brandName && j.cause ? ' × ' : ''}${esc(j.cause||'')}</div>
+      <h1 style="color:#fff;margin:4px 0 10px">${esc(j.name)}</h1>
+      <span style="display:inline-block;font-family:'Archivo Black';font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);background:var(--hivis);padding:6px 12px;border-radius:6px">${jobStage(j)==='completed'?'Job · Earnt':'In progress'}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div class="card" style="margin:0"><div class="mono muted" style="font-size:.56rem;letter-spacing:.12em;text-transform:uppercase">Date</div><div class="mono" style="font-size:.9rem;margin-top:4px">${firstIn?fmtDate(firstIn):esc(j.date||'—')}</div></div>
+      <div class="card" style="margin:0"><div class="mono muted" style="font-size:.56rem;letter-spacing:.12em;text-transform:uppercase">Volunteers</div><div class="mono" style="font-size:.9rem;margin-top:4px">${cis.length} (${verifiedCount} verified)</div></div>
+      <div class="card" style="margin:0"><div class="mono muted" style="font-size:.56rem;letter-spacing:.12em;text-transform:uppercase">On site</div><div class="mono" style="font-size:.9rem;margin-top:4px">${firstIn?fmtTime(firstIn)+(lastOut?' – '+fmtTime(lastOut):''):'—'}</div></div>
+      <div class="card" style="margin:0"><div class="mono muted" style="font-size:.56rem;letter-spacing:.12em;text-transform:uppercase">Volunteer hours</div><div class="mono" style="font-size:.9rem;margin-top:4px">${totalMs?fmtDur(totalMs):'—'}</div></div>
+    </div>
+    ${j.lat!=null ? `<div class="card"><div class="mono muted" style="font-size:.56rem;letter-spacing:.12em;text-transform:uppercase">Location</div>
+      <div class="mono" style="font-size:.8rem;margin-top:4px">${esc(j.address||'')} <a href="${mapsLink(j.lat,j.lng)}" target="_blank" style="color:inherit">View map ↗</a></div></div>` : ''}
+    ${section('before','Before')}${section('during','During')}${section('after','After')}
+    ${!photos.length ? '<div class="card muted" style="text-align:center">No photos yet.</div>' : ''}
+    ${rosterSection(j, id, {canVerify:isAdmin, canRelease:isAdmin})}
+    <div class="footer-mark">Verified by EARNT · Actions speak louder than money</div>`;
+}
+
+/* ---------- boot ---------- */
+restoreSession();
+render();
+setInterval(() => {
+  const h = location.hash.slice(1);
+  if (h.startsWith('job/') || h.startsWith('qr/')) {
+    const j = jobs[h.split('/')[1]];
+    if (j && jobActivity(j) === 'live') render();
+  }
+}, 60000);
+</script>
+</body>
+</html>
