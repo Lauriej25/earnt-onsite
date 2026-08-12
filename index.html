@@ -446,15 +446,29 @@ let openModalBrandId = null;
 function openBrandJobsModal(brandId) {
   const b = brands[brandId]; if (!b) return;
   openModalBrandId = brandId;
-  $('modalTitle').textContent = b.name + ' · Jobs';
+  $('modalTitle').textContent = b.name;
   renderBrandJobsModalBody(brandId);
   $('modalOverlay').classList.add('open');
 }
 function closeModal() { openModalBrandId = null; $('modalOverlay').classList.remove('open'); }
 function renderBrandJobsModalBody(brandId) {
+  const b = brands[brandId];
+  if (!b) { $('modalBody').innerHTML = '<div class="muted">This brand no longer exists.</div>'; return; }
   const ids = Object.keys(jobs).filter(id => jobs[id].brandId===brandId && !hiddenIds.has('job:'+id));
   const current = ids.filter(id => jobStage(jobs[id]) !== 'completed');
   const past = ids.filter(id => jobStage(jobs[id]) === 'completed');
+  const details = `<div class="static-field" style="margin-top:0">
+      <div class="sf-label">Contact</div>
+      <div class="sf-value">${esc(b.contact || '—')}</div>
+    </div>
+    <div class="static-field" style="margin-top:8px">
+      <div class="sf-label">Member since</div>
+      <div class="sf-value">${b.createdAt ? fmtDate(b.createdAt) : '—'}</div>
+    </div>
+    <div class="static-field" style="margin-top:8px">
+      <div class="sf-label">Jobs</div>
+      <div class="sf-value">${ids.length} total · ${current.length} current · ${past.length} completed</div>
+    </div>`;
   const row = id => {
     const j = jobs[id], st = jobStage(j);
     const label = st==='awaiting_cause' ? 'Awaiting cause' : st==='completed' ? 'Complete' : jobActivity(j)==='live' ? 'On site now' : 'Not started';
@@ -471,7 +485,8 @@ function renderBrandJobsModalBody(brandId) {
     </div>`;
   };
   $('modalBody').innerHTML = `
-    <h2 style="margin-bottom:8px">Current</h2>
+    ${details}
+    <h2 style="margin:18px 0 8px">Current</h2>
     ${current.length ? current.map(row).join('') : '<div class="muted" style="font-size:.8rem;margin-bottom:16px">None right now.</div>'}
     <h2 style="margin:18px 0 8px">Past</h2>
     ${past.length ? past.map(row).join('') : '<div class="muted" style="font-size:.8rem">No completed jobs yet.</div>'}`;
@@ -1142,6 +1157,8 @@ function renderQR(app, id) {
       <div class="mono" style="font-size:.78rem">${esc(j.address||'')} <a href="${mapsLink(j.lat,j.lng)}" target="_blank" style="color:inherit">View on map ↗</a></div>
       ${viewMapHTML('qrViewMap', j.lat, j.lng)}
     </div>` : ''}
+    ${jobStage(j)==='completed' && j.completedBy ? `<div class="mono muted no-print" style="font-size:.62rem;text-align:center;margin-top:-6px">
+      Marked complete by <b style="color:var(--ink)">${esc(j.completedBy)}</b> · ${fmtDate(j.completedAt)} at ${fmtTime(j.completedAt)}</div>` : ''}
     <button class="btn btn-hivis no-print" onclick="window.print()">Print QR Sign</button>
     <div style="height:10px" class="no-print"></div>
     <button class="btn btn-ghost no-print" onclick="copyLink('${link.replace(/'/g,"\\'")}')">Copy Check-in Link</button>
@@ -1152,27 +1169,57 @@ function renderQR(app, id) {
     <button class="btn btn-ghost no-print" onclick="go('report/${id}')">View Client Report</button>` : ''}
     <div class="no-print">${gallerySection()}</div>
     <div class="no-print">${rosterSection(j, id, {canVerify:true, canRelease:isAdmin})}</div>
+    ${isAdmin ? `<div class="no-print">${activityLogSection(j)}</div>` : ''}
     <button class="link-btn no-print" style="display:block;margin:12px auto" onclick="go('')">← All jobs</button>`;
 
   const box = document.getElementById('qrcanvas'); box.innerHTML = '';
   new QRCode(box, {text: link, width: 210, height: 210, colorDark:'#0B0B0A', colorLight:'#FFFFFF', correctLevel: QRCode.CorrectLevel.H});
   initViewMap('qrViewMap', j.lat, j.lng);
 }
+function whoAmI(j) {
+  if (isAdmin) return 'EARNT';
+  if (currentBrandId && brands[currentBrandId]) return brands[currentBrandId].name;
+  return (j && j.causeContactName) || 'The Cause';
+}
 function markComplete(id) {
   const j = jobs[id];
   const open = Object.values(j.checkins||{}).filter(c => !c.outAt).length;
   const msg = open ? (open + ' volunteer(s) still checked in. Mark this job complete anyway?') : 'Mark this job as complete? You can reopen it later if needed.';
   if (!confirm(msg)) return;
-  updatePath(id + '/status', 'completed'); updatePath(id + '/completedAt', Date.now());
+  const by = whoAmI(j);
+  updatePath(id + '/status', 'completed');
+  updatePath(id + '/completedAt', Date.now());
+  updatePath(id + '/completedBy', by);
+  pushPath(id + '/activityLog', {action:'completed', by, at:Date.now()});
   toast('Job marked complete');
 }
 function reopenJob(id) {
+  const j = jobs[id];
   if (!confirm('Reopen this job? Volunteers will be able to check in again.')) return;
-  updatePath(id + '/status', 'confirmed'); updatePath(id + '/completedAt', null);
+  const by = whoAmI(j);
+  updatePath(id + '/status', 'confirmed');
+  updatePath(id + '/completedAt', null);
+  updatePath(id + '/completedBy', null);
+  pushPath(id + '/activityLog', {action:'reopened', by, at:Date.now()});
   toast('Job reopened');
 }
 
 /* ---------- roster (shared between QR page and report) ---------- */
+/* ---------- activity log (EARNT admin only) ---------- */
+function activityLogSection(j) {
+  const entries = Object.values(j.activityLog||{}).sort((a,b) => b.at - a.at);
+  const icons = {completed:'✅', reopened:'🔄'};
+  const labels = {completed:'Completed by', reopened:'Reopened by'};
+  return `<div class="card">
+    <h2>Activity Log</h2>
+    <div class="mono muted" style="font-size:.58rem;margin-bottom:10px">Visible to EARNT admin only.</div>
+    ${entries.length ? entries.map(e => `<div class="mono" style="font-size:.7rem;padding:7px 0;border-bottom:1px solid var(--line)">
+      ${icons[e.action]||'•'} ${labels[e.action]||e.action} <b>${esc(e.by)}</b>
+      <span class="muted" style="display:block;font-size:.62rem;margin-top:2px">${fmtDate(e.at)} at ${fmtTime(e.at)}</span>
+    </div>`).join('') : '<div class="muted" style="font-size:.8rem">No activity logged yet.</div>'}
+  </div>`;
+}
+
 function rosterSection(j, id, opts) {
   const cis = Object.entries(j.checkins||{}).sort((a,b) => a[1].inAt - b[1].inAt);
   const legend = `<div class="legend-box"><b>Verified</b>The Cause has confirmed this check-in was genuine, based on the photo and location logged.
@@ -1350,6 +1397,7 @@ function renderReport(app, id) {
       <div class="eyebrow" style="color:#bdbcb4">${esc(j.brandName||'')}${j.brandName && j.cause ? ' × ' : ''}${esc(j.cause||'')}</div>
       <h1 style="color:#fff;margin:4px 0 10px">${esc(j.name)}</h1>
       <span style="display:inline-block;font-family:'Archivo Black';font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);background:var(--hivis);padding:6px 12px;border-radius:6px">${jobStage(j)==='completed'?'Job · Earnt':'In progress'}</span>
+      ${jobStage(j)==='completed' && j.completedBy ? `<div class="mono" style="font-size:.62rem;color:#bdbcb4;margin-top:8px">Marked complete by ${esc(j.completedBy)} · ${fmtDate(j.completedAt)} at ${fmtTime(j.completedAt)}</div>` : ''}
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
       <div class="card" style="margin:0"><div class="mono muted" style="font-size:.56rem;letter-spacing:.12em;text-transform:uppercase">Date</div><div class="mono" style="font-size:.9rem;margin-top:4px">${firstIn?fmtDate(firstIn):esc(j.date||'—')}</div></div>
@@ -1363,6 +1411,7 @@ function renderReport(app, id) {
     ${section('before','Before')}${section('during','During')}${section('after','After')}
     ${!photos.length ? '<div class="card muted" style="text-align:center">No photos yet.</div>' : ''}
     ${rosterSection(j, id, {canVerify:isAdmin, canRelease:isAdmin})}
+    ${isAdmin ? activityLogSection(j) : ''}
     <div class="footer-mark">Verified by EARNT · Actions speak louder than money</div>`;
   initViewMap('reportViewMap', j.lat, j.lng);
 }
