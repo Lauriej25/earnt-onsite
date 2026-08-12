@@ -184,24 +184,15 @@
    SETUP: paste a Firebase Realtime Database config below to
    go live. Until then this runs in DEMO MODE with seed data.
    ========================================================= */
-   
-const FIREBASE_CONFIG = // Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
-const firebaseConfig = {
+const FIREBASE_CONFIG = {
   apiKey: "AIzaSyC_UpXLInJ8y7Jetl5SlV68k6tAvDZ_Y68",
   authDomain: "earnt-onsite.firebaseapp.com",
+  databaseURL: "https://earnt-onsite-default-rtdb.europe-west1.firebasedatabase.app",
   projectId: "earnt-onsite",
   storageBucket: "earnt-onsite.firebasestorage.app",
   messagingSenderId: "1063977833836",
   appId: "1:1063977833836:web:a0f3de970b714368bccf49"
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig); /* e.g.
+}; /* e.g.
 const FIREBASE_CONFIG = { apiKey:"...", databaseURL:"https://YOUR-PROJECT.firebaseio.com", projectId:"..." }; */
 
 /* Paste a Google Maps Platform API key (with the Places API enabled) here to turn on
