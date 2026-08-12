@@ -269,6 +269,20 @@ function pinMapHTML(divId) {
     <div class="mono muted" style="font-size:.58rem;margin-top:4px">Drag the pin, or tap anywhere on the map, to fine-tune the exact spot.</div>` : '';
 }
 
+/* Small read-only map preview for pages that just need to SHOW a site
+   location (job check-in, roster, report) — no dragging, just a look. */
+function viewMapHTML(divId, lat, lng) {
+  if (lat == null) return '';
+  if (!mapsReady) return '<div class="mono muted" style="font-size:.58rem;margin-top:6px">Add a Google Maps API key to see this pinned on a map here too.</div>';
+  return `<div id="${divId}" style="height:150px;border-radius:10px;overflow:hidden;margin-top:8px;border:1px solid var(--line)"></div>`;
+}
+function initViewMap(divId, lat, lng) {
+  if (!mapsReady || !window.google || !google.maps || lat == null) return;
+  const el = $(divId); if (!el) return;
+  const map = new google.maps.Map(el, {center:{lat,lng}, zoom:16, disableDefaultUI:true, gestureHandling:'cooperative'});
+  new google.maps.Marker({position:{lat,lng}, map});
+}
+
 /* Demo admin passcode: earnt2026
    Demo brand "The Brown Dog" access code: BROWNDOG1
    To change either: run setPasscode('newcode') in the console and
@@ -464,8 +478,8 @@ async function createBrand() {
   const name = $('nbName').value.trim(), contact = $('nbContact').value.trim(), contactConfirm = $('nbContactConfirm').value.trim();
   if (!name) return toast('Give the brand a name');
   if (contact || contactConfirm) {
-    if (contact !== contactConfirm) return toast('Those two emails don\'t match');
-    if (!isValidEmail(contact)) return toast('That doesn\'t look like a valid email address');
+    if (contact !== contactConfirm) { alert("Those two emails don't match — please re-enter them."); return; }
+    if (!isValidEmail(contact)) { alert("That doesn't look like a valid email address."); return; }
   }
   const code = generateCode();
   const hash = await sha256(code);
@@ -567,13 +581,15 @@ function closeLightbox() { $('lightbox').classList.remove('open'); }
 let navHistory = [];
 let currentRoute = null;
 let isGoingBack = false;
-function go(route) { location.hash = route; }
+function go(route) {
+  const same = ('#' + route) === location.hash || (route === '' && !location.hash);
+  if (same) { render(); return; } // hashchange won't fire if the hash isn't actually changing
+  location.hash = route;
+}
 function goBack() {
   isGoingBack = true;
   const prev = navHistory.pop();
-  const target = prev !== undefined ? prev : '';
-  if (('#' + target) === location.hash || (target === '' && !location.hash)) { isGoingBack = false; render(); }
-  else location.hash = target;
+  go(prev !== undefined ? prev : '');
 }
 window.addEventListener('hashchange', render);
 
@@ -789,8 +805,8 @@ function createJob() {
     const causeEmail = $('nCauseContactEmail').value.trim();
     const causeEmailConfirm = $('nCauseContactEmailConfirm').value.trim();
     if (causeEmail || causeEmailConfirm) {
-      if (causeEmail !== causeEmailConfirm) return toast('Those two emails don\'t match');
-      if (!isValidEmail(causeEmail)) return toast('That doesn\'t look like a valid email address');
+      if (causeEmail !== causeEmailConfirm) { alert("Those two emails don't match — please re-enter them."); return; }
+      if (!isValidEmail(causeEmail)) { alert("That doesn't look like a valid email address."); return; }
     }
     saveJob(id, {...base, hostedBy:'cause', status:'awaiting_cause',
       causeContactName: $('nCauseContactName').value.trim(), causeContactEmail: causeEmail,
@@ -925,6 +941,11 @@ function renderQR(app, id) {
       <div class="qr-footer">${esc(j.address||'')}</div>
       ${j.directions ? `<div class="qr-footer" style="margin-top:4px;text-transform:none;letter-spacing:0">${esc(j.directions)}</div>` : ''}
     </div>
+    ${j.lat != null ? `<div class="card no-print">
+      <h2 style="margin-bottom:8px">Site Location</h2>
+      <div class="mono" style="font-size:.78rem">${esc(j.address||'')} <a href="${mapsLink(j.lat,j.lng)}" target="_blank" style="color:inherit">View on map ↗</a></div>
+      ${viewMapHTML('qrViewMap', j.lat, j.lng)}
+    </div>` : ''}
     <button class="btn btn-hivis no-print" onclick="window.print()">Print QR Sign</button>
     <div style="height:10px" class="no-print"></div>
     <button class="btn btn-ghost no-print" onclick="copyLink('${link.replace(/'/g,"\\'")}')">Copy Check-in Link</button>
@@ -939,6 +960,7 @@ function renderQR(app, id) {
 
   const box = document.getElementById('qrcanvas'); box.innerHTML = '';
   new QRCode(box, {text: link, width: 210, height: 210, colorDark:'#0B0B0A', colorLight:'#FFFFFF', correctLevel: QRCode.CorrectLevel.H});
+  initViewMap('qrViewMap', j.lat, j.lng);
 }
 function markComplete(id) {
   const j = jobs[id];
@@ -1048,6 +1070,7 @@ function renderJob(app, id) {
         ${esc(j.date||'')}${j.address ? ' · '+esc(j.address) : ''}
         ${j.lat ? ` · <a href="${mapsLink(j.lat,j.lng)}" target="_blank" style="color:inherit">Map ↗</a>` : ''}
       </div>
+      ${viewMapHTML('jobViewMap', j.lat, j.lng)}
     </div>
     ${j.notes ? `<div class="card" style="font-size:.85rem">${esc(j.notes)}</div>` : ''}
     ${j.directions ? `<div class="card" style="font-size:.8rem"><div class="mono muted" style="font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">Finding us</div>${esc(j.directions)}</div>` : ''}
@@ -1080,6 +1103,7 @@ function renderJob(app, id) {
       ${['before','during','after'].map(phaseBlock).join('')}
     </div>
     <button class="link-btn" style="display:block;margin:10px auto" onclick="go('')">← All jobs</button>`;
+  initViewMap('jobViewMap', j.lat, j.lng);
 }
 function switchPhase(p) { currentPhase = p; render(); }
 
@@ -1138,11 +1162,13 @@ function renderReport(app, id) {
       <div class="card" style="margin:0"><div class="mono muted" style="font-size:.56rem;letter-spacing:.12em;text-transform:uppercase">Volunteer hours</div><div class="mono" style="font-size:.9rem;margin-top:4px">${totalMs?fmtDur(totalMs):'—'}</div></div>
     </div>
     ${j.lat!=null ? `<div class="card"><div class="mono muted" style="font-size:.56rem;letter-spacing:.12em;text-transform:uppercase">Location</div>
-      <div class="mono" style="font-size:.8rem;margin-top:4px">${esc(j.address||'')} <a href="${mapsLink(j.lat,j.lng)}" target="_blank" style="color:inherit">View map ↗</a></div></div>` : ''}
+      <div class="mono" style="font-size:.8rem;margin-top:4px">${esc(j.address||'')} <a href="${mapsLink(j.lat,j.lng)}" target="_blank" style="color:inherit">View map ↗</a></div>
+      ${viewMapHTML('reportViewMap', j.lat, j.lng)}</div>` : ''}
     ${section('before','Before')}${section('during','During')}${section('after','After')}
     ${!photos.length ? '<div class="card muted" style="text-align:center">No photos yet.</div>' : ''}
     ${rosterSection(j, id, {canVerify:isAdmin, canRelease:isAdmin})}
     <div class="footer-mark">Verified by EARNT · Actions speak louder than money</div>`;
+  initViewMap('reportViewMap', j.lat, j.lng);
 }
 
 /* ---------- boot ---------- */
