@@ -23,6 +23,10 @@
     display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px}
   .hdr-title{text-align:center;cursor:pointer;user-select:none;min-width:0}
   .wordmark{font-family:'Archivo Black';font-size:1.05rem;letter-spacing:.06em;white-space:nowrap}
+  .header-logo{height:22px;width:auto;display:inline-block;vertical-align:middle}
+  .logo-row{display:flex;align-items:center;justify-content:center;gap:7px}
+  .logo-suffix{font-family:'Archivo Black';letter-spacing:.06em;white-space:nowrap}
+  .brand-logo{height:34px;width:auto;display:block;margin:0 auto 10px}
   .wordmark span{color:var(--hivis)}
   .hdr-sub{font-family:'IBM Plex Mono';font-size:.58rem;letter-spacing:.1em;color:#bdbcb4;text-transform:uppercase}
   .hdr-side{display:flex;flex-direction:column;gap:2px;min-width:0}
@@ -195,7 +199,10 @@
 <header>
   <button class="back-btn no-print" id="backBtn" onclick="goBack()" aria-label="Back">‹</button>
   <div class="hdr-title" onclick="headerLogoClick()">
-    <div class="wordmark">EARNT<span>·</span>ON SITE</div>
+    <div class="logo-row">
+      <img id="headerLogoImg" class="header-logo" alt="EARNT">
+      <span class="logo-suffix" style="font-size:1.05rem"><span style="color:var(--hivis)">·</span> ON SITE</span>
+    </div>
     <div class="hdr-sub" id="hdrSub">Volunteer check-in</div>
   </div>
   <div id="hdrRight" class="hdr-side"></div>
@@ -239,6 +246,7 @@ const FIREBASE_CONFIG = { apiKey:"...", databaseURL:"https://YOUR-PROJECT.fireba
    predictive address search. Without it, address fields still work as plain text —
    they just won't autocomplete. https://console.cloud.google.com/google/maps-apis */
    
+const LOGO_DATA_URI = "data:image/png;base64,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";
 const GOOGLE_MAPS_API_KEY = "AIzaSyDvXC6fMpHOay3s_baKhCVPI8W2GFFNV_w";
 let mapsReady = false;
 function loadGoogleMaps() {
@@ -533,6 +541,9 @@ const esc = s => (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>'
 function toast(msg, ms = 2600) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), ms); }
 function fmtTime(ts) { return new Date(ts).toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}); }
 function fmtDate(ts) { return new Date(ts).toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'short'}); }
+function todayStr() { const d = new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function fmtDateStr(s) { if (!s) return ''; const [y,m,d] = s.split('-'); return new Date(+y,+m-1,+d).toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'short'}); }
+function dateRangeText(j) { return (j.endDate && j.endDate !== j.date) ? (j.date + ' \u2013 ' + j.endDate) : (j.date || ''); }
 function fmtDur(ms) { const m = Math.round(ms/60000); return m < 60 ? m+' min' : Math.floor(m/60)+'h '+String(m%60).padStart(2,'0')+'m'; }
 function haversine(la1, lo1, la2, lo2) {
   const R = 6371000, r = d => d*Math.PI/180;
@@ -566,7 +577,8 @@ function copyLink(url) { navigator.clipboard.writeText(url).then(() => toast('Li
 function gpsLine(job, lat, lng) {
   if (job.lat == null || lat == null) return lat != null ? lat + ', ' + lng : '';
   const d = Math.round(haversine(job.lat, job.lng, lat, lng));
-  return lat + ', ' + lng + (d <= 150 ? ` · <span class="gps-ok">✓ ${d}m from site</span>` : ` · ${d}m from site`);
+  const within = d <= 50;
+  return lat + ', ' + lng + ` · <span style="color:${within?'var(--go)':'var(--stop)'};font-weight:600">${within?'\u2713':'\u26a0'} ${d}m from meeting point</span>`;
 }
 
 /* ---------- auth: EARNT admin ---------- */
@@ -637,11 +649,15 @@ function setVolunteerEmail(email) {
   volunteerEmail = email;
   localStorage.setItem('earnt_volunteer_email', email);
 }
-function clearVolunteerIdentity() {
-  volunteerName = null; volunteerPhone = null; volunteerEmail = null;
-  localStorage.removeItem('earnt_volunteer_name');
-  localStorage.removeItem('earnt_volunteer_phone');
-  localStorage.removeItem('earnt_volunteer_email');
+let volunteerNameBackup = null, volunteerPhoneBackup = null, volunteerEmailBackup = null;
+function beginChangeIdentity() {
+  volunteerNameBackup = volunteerName; volunteerPhoneBackup = volunteerPhone; volunteerEmailBackup = volunteerEmail;
+  volunteerName = null; volunteerPhone = null; volunteerEmail = null; // display only — localStorage untouched, so a reload or re-scan still remembers them
+  render();
+}
+function cancelChangeIdentity() {
+  volunteerName = volunteerNameBackup; volunteerPhone = volunteerPhoneBackup; volunteerEmail = volunteerEmailBackup;
+  render();
 }
 function isValidPhone(s) { return (s||'').replace(/[^\d]/g,'').length >= 7; }
 
@@ -834,11 +850,11 @@ function renderHome(app) {
     body += jobIds.length ? jobIds.map(id => {
       const j = jobs[id];
       const vols = Object.values(j.checkins||{}).length;
-      const dest = isAdmin ? 'edit/'+id : 'report/'+id;
+      const dest = isAdmin ? (jobStage(j)==='awaiting_cause' ? 'cause/'+id : 'qr/'+id) : 'report/'+id;
       return `<button class="job-item" onclick="go('${dest}')">
         <div class="name">${esc(j.name)}</div>
         <div class="meta">${isAdmin ? esc(j.brandName||'EARNT') + ' · ' : ''}${esc(j.cause||'')}</div>
-        <div class="meta">${esc(j.date||'')}${vols ? ' · '+vols+' volunteer'+(vols>1?'s':'') : ''}</div>
+        <div class="meta">${esc(dateRangeText(j))}${vols ? ' · '+vols+' volunteer'+(vols>1?'s':'') : ''}</div>
         ${chipFor(j)}
       </button>`;
     }).join('') : `<div class="card muted" style="text-align:center;padding:26px">${dataLoaded ? (currentBrandId ? 'No jobs yet — EARNT will set these up for you.' : 'No jobs yet.') : 'Loading…'}</div>`;
@@ -870,10 +886,18 @@ function renderHome(app) {
         </div>`;
     }
   } else {
+    const lastJobId = (!isAdmin && !currentBrandId) ? localStorage.getItem('earnt_last_job_id') : null;
+    const lastJob = lastJobId ? jobs[lastJobId] : null;
     body += `<div style="margin:20px 0 14px"><div class="eyebrow">Actions speak louder than money</div><h1>Welcome</h1></div>
       <div class="card">
         <div style="font-size:.85rem;margin-bottom:4px"><b>EARNT On Site</b> is the tool a Brand uses to set up a job, a Cause uses to confirm it and print the check-in QR, and volunteers use to check in with GPS and a photo — proof EARNT can review before releasing an Earned Thank You.</div>
       </div>`;
+    if (lastJob) {
+      body += `<div class="card" style="text-align:center">
+        <div class="mono muted" style="font-size:.7rem;margin-bottom:10px">Checked in earlier?</div>
+        <button class="btn btn-hivis" onclick="go('job/${lastJobId}')">Return to ${esc(lastJob.name)}</button>
+      </div>`;
+    }
     body += `<div class="card" style="text-align:center">
       <div class="mono muted" style="font-size:.7rem;margin-bottom:10px">Brand sign-in</div>
       ${brandGateOpen ? `
@@ -921,9 +945,11 @@ function renderNew(app) {
       <input type="text" id="nCause" placeholder="e.g. Barnes Primary School">
       <label>Date</label>
       <input type="date" id="nDate" value="${new Date().toISOString().slice(0,10)}">
+      <label>End date (only if this runs more than one day)</label>
+      <input type="date" id="nEndDate">
       <label>Notes for volunteers</label>
       <textarea id="nNotes" placeholder="What needs doing, what to bring…"></textarea>
-      <label>Site address</label>
+      <label>Meeting point for the day</label>
       <div class="addr-row">
         <input type="text" id="nAddress" placeholder="Start typing an address…" style="flex:1">
         ${countrySelectHTML('nCountry', 'gb')}
@@ -931,6 +957,11 @@ function renderNew(app) {
       ${!mapsReady ? '<div class="mono muted" style="font-size:.6rem;margin-top:6px">Address autocomplete isn\'t configured yet — type the address manually.</div>' : ''}
       <label>Directions / how to find us</label>
       <textarea id="nDirections" placeholder="e.g. Enter via the side gate, no signage on the main door"></textarea>
+      <div class="btn-row" style="margin-top:6px">
+        <button class="btn btn-sm btn-ghost" style="flex:1" onclick="pinHere()">📍 Pin current location</button>
+      </div>
+      <div class="mono muted" id="nPin" style="font-size:.66rem;margin-top:8px">${pendingPin ? `<span class="gps-ok">✓ Pinned</span> ${pendingPin.lat}, ${pendingPin.lng} · <a href="${mapsLink(pendingPin.lat,pendingPin.lng)}" target="_blank" style="color:inherit">View on map ↗</a>` : 'No pin yet — the Cause can still add one later if you leave this blank.'}</div>
+      ${pinMapHTML('nPinMap', 'confirmPinNew')}
       <label>Who confirms the exact pin on the day?</label>
       <div class="radio-row">
         <div class="radio-opt sel" id="hostCause" onclick="setHost('cause')">
@@ -948,13 +979,7 @@ function renderNew(app) {
         <label>Confirm cause contact email</label>
         <input type="email" id="nCauseContactEmailConfirm" placeholder="Re-enter to confirm">
       </div>
-      <div id="selfFields" class="hidden">
-        <div class="btn-row" style="margin-top:6px">
-          <button class="btn btn-sm btn-ghost" style="flex:1" onclick="pinHere()">📍 Pin current location</button>
-        </div>
-        <div class="mono muted" id="nPin" style="font-size:.66rem;margin-top:8px">${pendingPin ? `<span class="gps-ok">✓ Pinned</span> ${pendingPin.lat}, ${pendingPin.lng} · <a href="${mapsLink(pendingPin.lat,pendingPin.lng)}" target="_blank" style="color:inherit">View on map ↗</a>` : 'No pin yet — you can add one later too.'}</div>
-        ${pinMapHTML('nPinMap', 'confirmPinNew')}
-      </div>
+      <div id="selfFields" class="hidden"></div>
     </div>
     <button class="btn btn-hivis" onclick="createJob()">Create Job</button>
     <button class="link-btn" onclick="go('')" style="display:block;margin:12px auto">Cancel</button>`;
@@ -974,7 +999,6 @@ function setHost(choice) {
   $('hostCause').classList.toggle('sel', choice==='cause');
   $('hostSelf').classList.toggle('sel', choice==='self');
   $('causeFields').classList.toggle('hidden', choice!=='cause');
-  $('selfFields').classList.toggle('hidden', choice!=='self');
 }
 async function pinHere() {
   $('nPin').innerHTML = '<span class="spinner"></span> Getting GPS fix…';
@@ -990,9 +1014,10 @@ function createJob() {
   const brandId = brandVal || null;
   const brandName = brandVal ? brands[brandVal].name : 'EARNT';
   const address = $('nAddress').value.trim(), directions = $('nDirections').value.trim();
+  const endDateVal = $('nEndDate').value || $('nDate').value;
   const base = {
     brandId, brandName, name, cause,
-    date: $('nDate').value, notes: $('nNotes').value.trim(), address, directions,
+    date: $('nDate').value, endDate: endDateVal, notes: $('nNotes').value.trim(), address, directions,
     createdAt: Date.now(), checkins: {}, photos: {}
   };
   if (hostChoice === 'self') {
@@ -1042,7 +1067,9 @@ function renderEditJob(app, id) {
       <input type="text" id="eCause" value="${esc(j.cause||'')}">
       <label>Date</label>
       <input type="date" id="eDate" value="${esc(j.date||'')}">
-      <label>Site address</label>
+      <label>End date (only if this runs more than one day)</label>
+      <input type="date" id="eEndDate" value="${esc(j.endDate||j.date||'')}">
+      <label>Meeting point for the day</label>
       <div class="addr-row">
         <input type="text" id="eAddress" placeholder="Start typing an address…" value="${esc(j.address||'')}" style="flex:1">
         ${countrySelectHTML('eCountry', 'gb')}
@@ -1083,8 +1110,9 @@ function saveEditJob(id) {
   if (!name) return toast('Job needs a name');
   const j = jobs[id];
   const brandVal = $('eBrand').value;
+  const eDate = $('eDate').value;
   saveJob(id, {...j, name,
-    cause: $('eCause').value.trim(), date: $('eDate').value,
+    cause: $('eCause').value.trim(), date: eDate, endDate: $('eEndDate').value || eDate,
     address: $('eAddress').value.trim(), directions: $('eDirections').value.trim(), notes: $('eNotes').value.trim(),
     lat: editPin ? editPin.lat : (j.lat ?? null), lng: editPin ? editPin.lng : (j.lng ?? null),
     brandId: brandVal || null, brandName: brandVal ? brands[brandVal].name : 'EARNT'});
@@ -1121,7 +1149,9 @@ function renderCause(app, id) {
       <input type="text" id="cJobName" value="${esc(j.name)}">
       <label>Date</label>
       <input type="date" id="cDate" value="${esc(j.date||'')}">
-      <label>Site address *</label>
+      <label>End date (only if this runs more than one day)</label>
+      <input type="date" id="cEndDate" value="${esc(j.endDate||j.date||'')}">
+      <label>Meeting point for the day *</label>
       <div class="addr-row">
         <input type="text" id="cAddress" placeholder="Start typing an address…" value="${esc(j.address||'')}" style="flex:1">
         ${countrySelectHTML('cCountry', 'gb')}
@@ -1175,12 +1205,13 @@ function confirmCause(id) {
   const name = $('cJobName').value.trim();
   if (!name) return toast('Job needs a name');
   const address = $('cAddress').value.trim();
-  if (!address) return toast('Add a site address');
+  if (!address) return toast('Add the meeting point for the day');
   const directions = $('cDirections').value.trim();
   if (!directions) return toast('Add directions for volunteers before confirming — how do they actually find you?');
   if (!causePin) return toast('Pin your exact location before confirming — tap "Pin current location" above');
   const j = jobs[id];
-  saveJob(id, {...j, name, date: $('cDate').value, address, directions, notes: $('cNotes').value.trim(),
+  const cDate = $('cDate').value;
+  saveJob(id, {...j, name, date: cDate, endDate: $('cEndDate').value || cDate, address, directions, notes: $('cNotes').value.trim(),
     lat: causePin.lat, lng: causePin.lng,
     status:'confirmed', confirmedAt: Date.now()});
   causePin = null;
@@ -1216,7 +1247,7 @@ function renderQR(app, id) {
     <div class="qr-card" id="printCard">
       <div class="qr-eyebrow">EARNT<span>·</span>CHECK IN</div>
       <h1>${esc(j.name)}</h1>
-      <div class="qr-sub">${esc(j.brandName||'')}${j.brandName && j.cause ? ' × ' : ''}${esc(j.cause||'')}${j.date ? ' · '+esc(j.date) : ''}</div>
+      <div class="qr-sub">${esc(j.brandName||'')}${j.brandName && j.cause ? ' × ' : ''}${esc(j.cause||'')}${j.date ? ' · '+esc(dateRangeText(j)) : ''}</div>
       <div class="qr-box" id="qrcanvas"></div>
       <div class="qr-instruction">Scan to check in</div>
       <div class="qr-footer">${esc(j.address||'')}</div>
@@ -1237,8 +1268,10 @@ function renderQR(app, id) {
       : `<div style="height:10px" class="no-print"></div><button class="btn btn-ghost no-print" onclick="reopenJob('${id}')">Reopen Job</button>`}
     ${isAdmin || (currentBrandId && j.brandId===currentBrandId) ? `<div style="height:10px" class="no-print"></div>
     <button class="btn btn-ghost no-print" onclick="go('report/${id}')">View Client Report</button>` : ''}
+    ${isAdmin ? `<div style="height:10px" class="no-print"></div>
+    <button class="btn btn-ghost no-print" onclick="go('edit/${id}')">Edit Job</button>` : ''}
     <div class="no-print">${gallerySection()}</div>
-    <div class="no-print">${rosterSection(j, id, {canVerify:true, canRelease:isAdmin, canExport:isAdmin, canDeleteCheckin:isAdmin})}</div>
+    <div class="no-print">${rosterSection(j, id, {canVerify:isAdmin, canRelease:isAdmin, canExport:isAdmin, canDeleteCheckin:isAdmin})}</div>
     ${isAdmin ? `<div class="no-print">${activityLogSection(j, id)}</div>` : ''}
     <button class="link-btn no-print" style="display:block;margin:12px auto" onclick="go('')">← All jobs</button>`;
 
@@ -1279,8 +1312,8 @@ function reopenJob(id) {
 function activityLogSection(j, id) {
   const cleared = hiddenIds.has('log:' + id);
   const entries = cleared ? [] : Object.values(j.activityLog||{}).sort((a,b) => b.at - a.at);
-  const icons = {completed:'✅', reopened:'🔄'};
-  const labels = {completed:'Completed by', reopened:'Reopened by'};
+  const icons = {completed:'✅', reopened:'🔄', checkin_reopened:'🔓'};
+  const labels = {completed:'Completed by', reopened:'Reopened by', checkin_reopened:''};
   const safeLabel = 'Activity log';
   return `<div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center">
@@ -1298,7 +1331,7 @@ function activityLogSection(j, id) {
 function firstNameOf(name) { return (name||'').trim().split(/\s+/)[0] || name; }
 function rosterSection(j, id, opts) {
   const allCis = Object.entries(j.checkins||{}).filter(([key]) => !hiddenIds.has('checkin:'+id+'::'+key)).sort((a,b) => a[1].inAt - b[1].inAt);
-  const legend = `<div class="legend-box"><b>Verified</b>The Cause has confirmed this check-in was genuine, based on the photo and location logged.
+  const legend = `<div class="legend-box"><b>Verified</b>EARNT has confirmed this check-in was genuine, based on the photo and location logged.
     An Earned Thank You can't be marked released until it's verified.</div>`;
   if (!allCis.length) return `<div class="card"><h2>Roster</h2>${legend}<div class="muted" style="font-size:.82rem">No check-ins yet.</div></div>`;
   const photos = j.photos||{};
@@ -1319,14 +1352,15 @@ function rosterSection(j, id, opts) {
       <div class="rr-top">
         <div><div class="rr-name">${esc(redact ? firstNameOf(c.name) : c.name)}</div>
           <div class="rr-time">${!redact && c.phone ? esc(c.phone) + ' · ' : ''}${!redact && c.email ? esc(c.email) + ' · ' : ''}In ${fmtTime(c.inAt)}${c.outAt ? ' → Out '+fmtTime(c.outAt)+' ('+fmtDur(c.outAt-c.inAt)+')' : ' · <span class="gps-ok">on site</span>'}</div>
-          ${!redact ? `<div class="rr-time">${gpsLine(j, c.inLat, c.inLng)}</div>` : ''}
+          ${!redact && c.inLat!=null ? `<div class="rr-time">In: ${gpsLine(j, c.inLat, c.inLng)}</div>` : ''}
+          ${!redact && c.outLat!=null ? `<div class="rr-time">Out: ${gpsLine(j, c.outLat, c.outLng)}</div>` : ''}
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
           ${c.verified ? '<span class="badge badge-verified">✓ Verified</span>' : '<span class="badge badge-unverified">Unverified</span>'}
           ${c.rewardReleased ? '<span class="badge badge-released">ETY released</span>' : ''}
         </div>
       </div>
-      ${!redact && ((inP && inP.data) || (outP && outP.data)) ? `<div class="roster-photos">
+      ${(inP && inP.data) || (outP && outP.data) ? `<div class="roster-photos">
         ${inP && inP.data ? `<img src="${inP.data}" onclick="openLightbox(this.src,'Check-in proof · ${fmtTime(c.inAt)}')">` : ''}
         ${outP && outP.data ? `<img src="${outP.data}" onclick="openLightbox(this.src,'Check-out proof · ${fmtTime(c.outAt)}')">` : ''}
       </div>` : ''}
@@ -1381,6 +1415,7 @@ function exportJobCSV(id) {
 function renderJob(app, id) {
   const j = jobs[id];
   if (!j) { app.innerHTML = '<div class="card" style="margin-top:20px">Job not found.</div>'; return; }
+  if (!isAdmin && !currentBrandId) localStorage.setItem('earnt_last_job_id', id);
   const stage = jobStage(j);
   if (stage === 'awaiting_cause') {
     $('hdrSub').textContent = 'Not open yet';
@@ -1399,9 +1434,16 @@ function renderJob(app, id) {
 
   $('hdrSub').textContent = esc(j.cause || 'Job');
   const myDeviceId = getDeviceId();
-  let myKey = Object.keys(j.checkins||{}).find(k => j.checkins[k].deviceId === myDeviceId && !j.checkins[k].outAt);
-  if (!myKey && volunteerName) myKey = Object.keys(j.checkins||{}).find(k => j.checkins[k].name === volunteerName && !j.checkins[k].outAt);
+  const myEntries = Object.entries(j.checkins||{})
+    .filter(([,c]) => c.deviceId === myDeviceId || (volunteerName && c.name === volunteerName))
+    .sort((a,b) => a[1].inAt - b[1].inAt);
+  const lastEntry = myEntries.length ? myEntries[myEntries.length - 1] : null;
+  const myKey = lastEntry && !lastEntry[1].outAt ? lastEntry[0] : null;
   const me = myKey ? j.checkins[myKey] : null;
+  const closedKey = lastEntry && lastEntry[1].outAt ? lastEntry[0] : null;
+  const closedMe = closedKey ? j.checkins[closedKey] : null;
+  const dr = me || closedMe; // whichever record is relevant to display in the stamps row
+  const outsideDates = !!(j.date && (todayStr() < j.date || todayStr() > (j.endDate || j.date)));
   if (me) {
     if (!volunteerName) volunteerName = me.name; // recognised purely by device — keep the UI in sync
     if (!volunteerPhone && me.phone) volunteerPhone = me.phone;
@@ -1425,6 +1467,10 @@ function renderJob(app, id) {
 
   app.innerHTML = `
     <div style="background:var(--ink);color:#fff;border-radius:var(--radius);padding:18px;text-align:center;margin:18px 0 0">
+      <div class="logo-row" style="margin-bottom:10px">
+        <img src="${LOGO_DATA_URI}" alt="EARNT" style="height:30px;width:auto">
+        <span class="logo-suffix" style="font-size:1.15rem;color:#fff"><span style="color:var(--hivis)">·</span> ON SITE</span>
+      </div>
       <div style="font-size:1.6rem">👋</div>
       <div style="font-family:'Archivo Black';font-size:1.05rem;text-transform:uppercase;margin:6px 0 4px">Welcome!</div>
       <div class="mono" style="font-size:.72rem;color:#bdbcb4">Thank you for your support with ${esc(j.name)}.</div>
@@ -1433,7 +1479,7 @@ function renderJob(app, id) {
       <div class="eyebrow">${esc(j.brandName||'')}${j.brandName && j.cause ? ' × ' : ''}${esc(j.cause||'')}</div>
       <h1>${esc(j.name)}</h1>
       <div class="mono muted" style="font-size:.68rem;margin-top:6px">
-        ${esc(j.date||'')}${j.address ? ' · '+esc(j.address) : ''}
+        ${esc(dateRangeText(j))}${j.address ? ' · '+esc(j.address) : ''}
         ${j.lat ? ` · <a href="${mapsLink(j.lat,j.lng)}" target="_blank" style="color:inherit">Map ↗</a>` : ''}
       </div>
       ${viewMapHTML('jobViewMap', j.lat, j.lng)}
@@ -1450,21 +1496,25 @@ function renderJob(app, id) {
           <label>Email</label>
           <input type="email" id="volEmail" placeholder="For an extra check before your ETY is released" autocomplete="email" value="${esc(volunteerEmail||'')}">
           <div class="mono muted" style="font-size:.6rem;margin-top:4px">Kept on file with your check-in — helps us confirm everyone's real details.</div>
+          ${volunteerNameBackup ? `<button class="link-btn" onclick="cancelChangeIdentity()" style="padding:6px 0 0">Cancel — keep my details as they were</button>` : ''}
           <div style="height:10px"></div>` : `
           <div class="mono muted" style="font-size:.66rem;margin-bottom:10px">Signed in as <b style="color:var(--ink)">${esc(volunteerName)}</b> · ${esc(volunteerPhone)} · ${esc(volunteerEmail)}
-            <button class="link-btn" onclick="clearVolunteerIdentity();render()" style="padding:0 0 0 8px">change</button></div>`}
+            <button class="link-btn" onclick="beginChangeIdentity()" style="padding:0 0 0 8px">change</button></div>`}
         <div class="stamp-row">
           <div class="stamp ${me&&me.inAt?'filled':''}"><div class="s-label">Check in</div><div class="s-time">${me&&me.inAt?fmtTime(me.inAt):'--:--'}</div>
-            <div class="s-gps">${me&&me.inLat?gpsLine(j,me.inLat,me.inLng):''}</div></div>
-          <div class="stamp ${me&&me.outAt?'filled':''}"><div class="s-label">Check out</div><div class="s-time">${me&&me.outAt?fmtTime(me.outAt):'--:--'}</div>
-            <div class="s-gps">${me&&me.outLat?gpsLine(j,me.outLat,me.outLng):''}</div></div>
+            <div class="s-gps">${dr&&dr.inLat?gpsLine(j,dr.inLat,dr.inLng):''}</div></div>
+          <div class="stamp ${dr&&dr.outAt?'filled':''}"><div class="s-label">Check out</div><div class="s-time">${dr&&dr.outAt?fmtTime(dr.outAt):'--:--'}</div>
+            <div class="s-gps">${dr&&dr.outLat?gpsLine(j,dr.outLat,dr.outLng):''}</div></div>
         </div>
         <div class="mono muted" style="font-size:.64rem;margin:8px 0">Take a selfie or a photo of the meeting point when you check in and out — it's what EARNT uses to verify the ETY reward.</div>
-        ${!me || !me.inAt
-          ? `<button class="btn btn-hivis" id="ciBtn" onclick="beginCheckIn('${id}')">Check In</button>`
-          : !me.outAt
-            ? `<button class="btn btn-ink" id="coBtn" onclick="beginCheckOut('${id}','${myKey}')">Check Out</button>`
-            : `<div class="mono" style="font-size:.74rem;text-align:center;padding:6px">✓ Shift logged — ${fmtDur(me.outAt-me.inAt)}. Thank you.</div>`}
+        ${me
+          ? `<button class="btn btn-ink" id="coBtn" onclick="beginCheckOut('${id}','${myKey}')">Check Out</button>`
+          : outsideDates
+            ? `<div class="mono" style="font-size:.72rem;text-align:center;padding:8px 0;color:var(--stop)">This job is scheduled for ${esc(j.date)}${j.endDate && j.endDate!==j.date ? ' – '+esc(j.endDate) : ''} — check-in isn't open today.</div>`
+            : closedMe
+              ? `<div class="mono" style="font-size:.74rem;text-align:center;padding:6px 0 10px">✓ Shift logged — ${fmtDur(closedMe.outAt-closedMe.inAt)}. Thank you.</div>
+                 <button class="btn btn-ghost" onclick="beginReopenCheckin('${id}','${closedKey}')">Need to check back in?</button>`
+              : `<button class="btn btn-hivis" id="ciBtn" onclick="beginCheckIn('${id}')">Check In</button>`}
       </div>
     </div>
     <div class="card">
@@ -1478,6 +1528,10 @@ function renderJob(app, id) {
 function switchPhase(p) { currentPhase = p; render(); }
 
 async function beginCheckIn(jobId) {
+  const j = jobs[jobId];
+  if (j && j.date && (todayStr() < j.date || todayStr() > (j.endDate || j.date))) {
+    return toast('This job isn\u2019t scheduled for today — check-in isn\u2019t open');
+  }
   if (!volunteerName || !volunteerPhone || !volunteerEmail) {
     const v = $('volName') ? $('volName').value.trim() : '';
     const p = $('volPhone') ? $('volPhone').value.trim() : '';
@@ -1488,6 +1542,7 @@ async function beginCheckIn(jobId) {
     if (!em) return toast('Enter your email too — it\u2019s a double-check before your ETY is released');
     if (!isValidEmail(em)) return toast('That doesn\u2019t look like a valid email address');
     setVolunteerName(v); setVolunteerPhone(p); setVolunteerEmail(em);
+    volunteerNameBackup = null; volunteerPhoneBackup = null; volunteerEmailBackup = null;
   }
   const btn = $('ciBtn'); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Getting location…';
   try {
@@ -1507,6 +1562,44 @@ async function beginCheckOut(jobId, key) {
     toast('Take a selfie or a photo of the meeting point to confirm you\u2019re heading off', 4000);
     $('photoInput').value = ''; $('photoInput').click();
   } catch (e) { btn.disabled = false; btn.textContent = 'Check Out'; toast(e.message, 4000); }
+}
+
+/* Reopening a closed shift — capped at 3 uses per check-in, logged for EARNT. */
+function beginReopenCheckin(jobId, key) {
+  const c = jobs[jobId].checkins[key];
+  const used = c.reopenCount || 0;
+  if (used >= 3) {
+    showModal('Limit reached', `<div style="text-align:center;padding:6px 0">
+      <div style="font-size:2rem">\ud83d\udd12</div>
+      <div style="font-weight:700;font-size:1.05rem;margin:10px 0 6px">You've already checked back in the maximum number of times</div>
+      <div style="font-size:.85rem;color:var(--muted)">Please speak to EARNT directly if you still need to check in.</div>
+      <button class="btn btn-hivis" style="margin-top:18px" onclick="closeModal()">OK</button>
+    </div>`);
+    return;
+  }
+  showModal('Already checked out', `<div style="text-align:center;padding:6px 0">
+    <div style="font-size:2rem">\ud83e\udd14</div>
+    <div style="font-weight:700;font-size:1.05rem;margin:10px 0 6px">You've already checked out today</div>
+    <div style="font-size:.85rem;color:var(--muted)">Checked out at ${fmtTime(c.outAt)}. Do you need to check back in?</div>
+    <div class="btn-row" style="margin-top:18px">
+      <button class="btn btn-sm btn-ghost" style="flex:1" onclick="closeModal()">No, I'm done</button>
+      <button class="btn btn-sm btn-ink" style="flex:1" onclick="confirmReopenCheckin('${jobId}','${key}')">Check me back in</button>
+    </div>
+  </div>`);
+}
+function confirmReopenCheckin(jobId, key) {
+  const j = jobs[jobId];
+  if (j && j.date && (todayStr() < j.date || todayStr() > (j.endDate || j.date))) {
+    closeModal();
+    return toast('This job isn\u2019t scheduled for today — check-in isn\u2019t open');
+  }
+  const c = jobs[jobId].checkins[key];
+  const used = (c.reopenCount || 0) + 1;
+  updatePath(jobId + '/checkins/' + key, {...c, outAt:null, outLat:null, outLng:null, outAcc:null, outPhotoId:null, reopenCount: used});
+  pushPath(jobId + '/activityLog', {action:'checkin_reopened', by: c.name + ' — volunteer self-reopen (' + used + ' of 3 used)', at: Date.now()});
+  closeModal();
+  toast('Checked back in \u2713');
+  render();
 }
 
 /* ---------- CLIENT REPORT ---------- */
@@ -1532,6 +1625,10 @@ function renderReport(app, id) {
 
   app.innerHTML = `
     <div style="background:var(--ink);color:#fff;border-radius:var(--radius);padding:22px 18px;margin:16px 0 14px">
+      <div class="logo-row" style="justify-content:flex-start;margin-bottom:12px">
+        <img src="${LOGO_DATA_URI}" alt="EARNT" style="height:24px;width:auto">
+        <span class="logo-suffix" style="font-size:1rem;color:#fff"><span style="color:var(--hivis)">·</span> ON SITE</span>
+      </div>
       <div class="eyebrow" style="color:#bdbcb4">${esc(j.brandName||'')}${j.brandName && j.cause ? ' × ' : ''}${esc(j.cause||'')}</div>
       <h1 style="color:#fff;margin:4px 0 10px">${esc(j.name)}</h1>
       <span style="display:inline-block;font-family:'Archivo Black';font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);background:var(--hivis);padding:6px 12px;border-radius:6px">${jobStage(j)==='completed'?'Job · Earnt':'In progress'}</span>
@@ -1543,6 +1640,13 @@ function renderReport(app, id) {
       <div class="card" style="margin:0"><div class="mono muted" style="font-size:.56rem;letter-spacing:.12em;text-transform:uppercase">On site</div><div class="mono" style="font-size:.9rem;margin-top:4px">${firstIn?fmtTime(firstIn)+(lastOut?' – '+fmtTime(lastOut):''):'—'}</div></div>
       <div class="card" style="margin:0"><div class="mono muted" style="font-size:.56rem;letter-spacing:.12em;text-transform:uppercase">Volunteer hours</div><div class="mono" style="font-size:.9rem;margin-top:4px">${totalMs?fmtDur(totalMs):'—'}</div></div>
     </div>
+    ${jobStage(j)!=='awaiting_cause' ? `<div class="card" style="text-align:center">
+      <h2 style="margin-bottom:8px">Check-In QR</h2>
+      <div class="qr-box" id="reportQrCanvas" style="margin:0 auto"></div>
+      <div class="btn-row" style="margin-top:12px">
+        <button class="btn btn-sm btn-ghost" style="flex:1" onclick="copyLink('${checkinUrl(id).replace(/'/g,"\\'")}')">Copy Check-in Link</button>
+      </div>
+    </div>` : ''}
     ${j.lat!=null ? `<div class="card"><div class="mono muted" style="font-size:.56rem;letter-spacing:.12em;text-transform:uppercase">Location</div>
       <div class="mono" style="font-size:.8rem;margin-top:4px">${esc(j.address||'')} <a href="${mapsLink(j.lat,j.lng)}" target="_blank" style="color:inherit">View map ↗</a></div>
       ${viewMapHTML('reportViewMap', j.lat, j.lng)}</div>` : ''}
@@ -1553,9 +1657,14 @@ function renderReport(app, id) {
     ${isAdmin ? activityLogSection(j, id) : ''}
     <div class="footer-mark">Verified by EARNT · Actions speak louder than money</div>`;
   initViewMap('reportViewMap', j.lat, j.lng);
+  if (jobStage(j) !== 'awaiting_cause') {
+    const box = document.getElementById('reportQrCanvas');
+    if (box) { box.innerHTML = ''; new QRCode(box, {text: checkinUrl(id), width: 170, height: 170, colorDark:'#0B0B0A', colorLight:'#FFFFFF', correctLevel: QRCode.CorrectLevel.H}); }
+  }
 }
 
 /* ---------- boot ---------- */
+document.getElementById('headerLogoImg').src = LOGO_DATA_URI;
 restoreSession();
 restoreVolunteerName();
 render();
