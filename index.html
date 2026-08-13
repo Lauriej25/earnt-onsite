@@ -485,31 +485,12 @@ function renderBrandJobsModalBody(brandId) {
       </div>
     </div>`;
   };
-  const unowned = Object.keys(jobs).filter(id => !jobs[id].brandId && !hiddenIds.has('job:'+id));
-  const linkSection = unowned.length ? `<div class="static-field" style="margin-top:8px">
-      <div class="sf-label">Link a job EARNT created</div>
-      <div class="mono muted" style="font-size:.62rem;margin:4px 0 8px">So this Brand sees it the moment they log in.</div>
-      <div class="btn-row">
-        <select id="linkJobSelect" style="flex:1;padding:10px;border:1px solid var(--line);border-radius:10px;font-family:'Archivo';font-size:.8rem;background:#fff;color:var(--ink)">
-          ${unowned.map(id => `<option value="${id}">${esc(jobs[id].name)}${jobs[id].date?' · '+esc(jobs[id].date):''}</option>`).join('')}
-        </select>
-        <button class="btn btn-sm btn-ink" onclick="linkJobToBrand($('linkJobSelect').value,'${brandId}')">Link</button>
-      </div>
-    </div>` : '';
   $('modalBody').innerHTML = `
     ${details}
-    ${linkSection}
     <h2 style="margin:18px 0 8px">Current</h2>
     ${current.length ? current.map(row).join('') : '<div class="muted" style="font-size:.8rem;margin-bottom:16px">None right now.</div>'}
     <h2 style="margin:18px 0 8px">Past</h2>
     ${past.length ? past.map(row).join('') : '<div class="muted" style="font-size:.8rem">No completed jobs yet.</div>'}`;
-}
-function linkJobToBrand(jobId, brandId) {
-  const j = jobs[jobId], b = brands[brandId];
-  if (!j || !b) return;
-  saveJob(jobId, {...j, brandId, brandName: b.name});
-  toast('Linked to ' + b.name);
-  renderBrandJobsModalBody(brandId);
 }
 
 /* ---------- helpers ---------- */
@@ -800,7 +781,7 @@ function renderHome(app) {
     body += jobIds.length ? jobIds.map(id => {
       const j = jobs[id];
       const vols = Object.values(j.checkins||{}).length;
-      const dest = jobStage(j) === 'awaiting_cause' ? 'cause/'+id : 'qr/'+id;
+      const dest = isAdmin ? 'edit/'+id : (jobStage(j) === 'awaiting_cause' ? 'cause/'+id : 'qr/'+id);
       return `<button class="job-item" onclick="go('${dest}')">
         <div class="name">${esc(j.name)}</div>
         <div class="meta">${isAdmin ? esc(j.brandName||'EARNT') + ' · ' : ''}${esc(j.cause||'')}</div>
@@ -995,15 +976,18 @@ function renderEditJob(app, id) {
   app.innerHTML = `
     <div style="margin:20px 0 6px"><h1>Edit Job</h1></div>
     <div class="card">
+      <h2 style="margin-bottom:8px">Owned By</h2>
+      <div class="mono muted" style="font-size:.62rem;margin-bottom:8px">Change this to move the job to a different Brand — they'll see it the moment they next sign in.</div>
+      <select id="eBrand" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;font-family:'Archivo';font-size:1rem;background:#fff;color:var(--ink)">
+        <option value="" ${!j.brandId?'selected':''}>EARNT</option>
+        ${Object.keys(brands).map(bid => `<option value="${bid}" ${j.brandId===bid?'selected':''}>${esc(brands[bid].name)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="card">
       <label style="margin-top:0">Job name</label>
       <input type="text" id="eJobName" value="${esc(j.name)}">
       <label>Cause / organisation</label>
       <input type="text" id="eCause" value="${esc(j.cause||'')}">
-      <label>Owned by</label>
-      <select id="eBrand">
-        <option value="" ${!j.brandId?'selected':''}>EARNT</option>
-        ${Object.keys(brands).map(bid => `<option value="${bid}" ${j.brandId===bid?'selected':''}>${esc(brands[bid].name)}</option>`).join('')}
-      </select>
       <label>Date</label>
       <input type="date" id="eDate" value="${esc(j.date||'')}">
       <label>Site address</label>
@@ -1021,7 +1005,7 @@ function renderEditJob(app, id) {
       <textarea id="eNotes">${esc(j.notes||'')}</textarea>
     </div>
     <button class="btn btn-hivis" onclick="saveEditJob('${id}')">Save Changes</button>
-    <button class="link-btn" onclick="go('qr/${id}')" style="display:block;margin:12px auto">Cancel</button>`;
+    <button class="link-btn" onclick="go('qr/${id}')" style="display:block;margin:12px auto">View Job →</button>`;
   initAddressAutocomplete('eAddress', 'eCountry', p => {
     editPin = {lat:p.lat, lng:p.lng};
     $('eAddress').value = p.address;
