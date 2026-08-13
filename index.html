@@ -121,6 +121,9 @@
   .phase-tab.active{background:var(--ink);color:#fff}
   .photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
   .photo-grid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:pointer}
+  .photo-wrap{position:relative}
+  .photo-del{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;background:rgba(11,11,10,.75);
+    color:#fff;border:none;font-size:.75rem;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2}
   .add-photo{aspect-ratio:1;border:1.5px dashed var(--ink);border-radius:8px;background:none;
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;
     font-family:'IBM Plex Mono';font-size:.58rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink)}
@@ -398,6 +401,16 @@ function pushPath(path, val) {
 function newId() { return DEMO ? 'j' + Math.random().toString(36).slice(2, 9) : db.ref('jobs').push().key; }
 function deleteJob(id) { if (DEMO) { delete jobs[id]; render(); } else db.ref('jobs/' + id).remove(); }
 function deleteBrand(id) { if (DEMO) { delete brands[id]; render(); } else db.ref('brands/' + id).remove(); }
+function deletePhoto(jobId, photoId) {
+  if (DEMO) { delete jobs[jobId].photos[photoId]; render(); }
+  else db.ref('jobs/' + jobId + '/photos/' + photoId).remove();
+}
+function deleteCheckin(jobId, key) {
+  const c = jobs[jobId] && jobs[jobId].checkins && jobs[jobId].checkins[key];
+  if (c) { if (c.inPhotoId) deletePhoto(jobId, c.inPhotoId); if (c.outPhotoId) deletePhoto(jobId, c.outPhotoId); }
+  if (DEMO) { delete jobs[jobId].checkins[key]; render(); }
+  else db.ref('jobs/' + jobId + '/checkins/' + key).remove();
+}
 function saveBrand(id, b) { if (DEMO) { brands[id] = b; render(); } else db.ref('brands/' + id).set(b); }
 function newBrandId() { return DEMO ? 'b' + Math.random().toString(36).slice(2, 9) : db.ref('brands').push().key; }
 
@@ -530,6 +543,10 @@ function jobActivity(job) {
 function checkinUrl(id) { return location.origin + location.pathname + '#job/' + id; }
 function causeUrl(id) { return location.origin + location.pathname + '#cause/' + id; }
 function mapsLink(lat, lng) { return 'https://www.google.com/maps?q=' + lat + ',' + lng; }
+function photoThumb(jobId, ph, label) {
+  const del = isAdmin ? `<button class="photo-del" onclick="event.stopPropagation();requestDelete('photo','${jobId}::${ph.id}','photo',()=>deletePhoto('${jobId}','${ph.id}'))">✕</button>` : '';
+  return `<div class="photo-wrap"><img src="${ph.data}" loading="lazy" onclick="openLightbox(this.src,'${label}')">${del}</div>`;
+}
 function copyLink(url) { navigator.clipboard.writeText(url).then(() => toast('Link copied')).catch(() => toast(url, 5000)); }
 function gpsLine(job, lat, lng) {
   if (job.lat == null || lat == null) return lat != null ? lat + ', ' + lng : '';
@@ -784,18 +801,19 @@ function renderHome(app) {
 
   if (isAdmin || currentBrandId) {
     body += `<div style="margin:20px 0 14px"><div class="eyebrow">Actions speak louder than money</div><h1>${isAdmin ? 'All Jobs' : 'Your Jobs'}</h1></div>`;
+    if (currentBrandId) body += `<div class="mono muted" style="font-size:.68rem;margin:-8px 0 16px">EARNT sets these up and runs them day to day — you can track progress here.</div>`;
     body += jobIds.length ? jobIds.map(id => {
       const j = jobs[id];
       const vols = Object.values(j.checkins||{}).length;
-      const dest = isAdmin ? 'edit/'+id : (jobStage(j) === 'awaiting_cause' ? 'cause/'+id : 'qr/'+id);
+      const dest = isAdmin ? 'edit/'+id : 'report/'+id;
       return `<button class="job-item" onclick="go('${dest}')">
         <div class="name">${esc(j.name)}</div>
         <div class="meta">${isAdmin ? esc(j.brandName||'EARNT') + ' · ' : ''}${esc(j.cause||'')}</div>
         <div class="meta">${esc(j.date||'')}${vols ? ' · '+vols+' volunteer'+(vols>1?'s':'') : ''}</div>
         ${chipFor(j)}
       </button>`;
-    }).join('') : `<div class="card muted" style="text-align:center;padding:26px">${dataLoaded ? (currentBrandId ? 'No jobs yet — jobs you create will show up here.' : 'No jobs yet.') : 'Loading…'}</div>`;
-    body += `<div style="margin-top:16px"><button class="btn btn-ghost" onclick="go('new')">+ New Job</button></div>`;
+    }).join('') : `<div class="card muted" style="text-align:center;padding:26px">${dataLoaded ? (currentBrandId ? 'No jobs yet — EARNT will set these up for you.' : 'No jobs yet.') : 'Loading…'}</div>`;
+    if (isAdmin) body += `<div style="margin-top:16px"><button class="btn btn-ghost" onclick="go('new')">+ New Job</button></div>`;
 
     if (isAdmin) {
       body += `<div style="margin-top:28px"><h2>Brand Accounts</h2></div><div class="card">`;
@@ -854,13 +872,20 @@ function renderHome(app) {
 
 /* ---------- NEW JOB (Brand or EARNT) ---------- */
 function renderNew(app) {
-  if (!isAdmin && !currentBrandId) { toast('Sign in to create a job'); go(''); return; }
+  if (!isAdmin) { toast('Only EARNT sets up jobs'); go(''); return; }
   $('hdrSub').textContent = 'New job';
   hostChoice = 'cause';
   pendingPin = null;
   newJobMapInstance = null;
   app.innerHTML = `
     <div style="margin:20px 0 6px"><h1>New Job</h1></div>
+    <div class="card">
+      <label style="margin-top:0">For which Brand? *</label>
+      <select id="nBrandSelect" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;font-family:'Archivo';font-size:1rem;background:#fff;color:var(--ink)">
+        <option value="">EARNT (no Brand — a Limited Drop)</option>
+        ${Object.keys(brands).map(bid => `<option value="${bid}">${esc(brands[bid].name)}</option>`).join('')}
+      </select>
+    </div>
     <div class="card">
       <label style="margin-top:0">Job name *</label>
       <input type="text" id="nJobName" placeholder="e.g. Playground repaint">
@@ -870,34 +895,34 @@ function renderNew(app) {
       <input type="date" id="nDate" value="${new Date().toISOString().slice(0,10)}">
       <label>Notes for volunteers</label>
       <textarea id="nNotes" placeholder="What needs doing, what to bring…"></textarea>
-      <label>Who's hosting on the day?</label>
+      <label>Site address</label>
+      <div class="addr-row">
+        <input type="text" id="nAddress" placeholder="Start typing an address…" style="flex:1">
+        ${countrySelectHTML('nCountry', 'gb')}
+      </div>
+      ${!mapsReady ? '<div class="mono muted" style="font-size:.6rem;margin-top:6px">Address autocomplete isn\'t configured yet — type the address manually.</div>' : ''}
+      <label>Directions / how to find us</label>
+      <textarea id="nDirections" placeholder="e.g. Enter via the side gate, no signage on the main door"></textarea>
+      <label>Who confirms the exact pin on the day?</label>
       <div class="radio-row">
         <div class="radio-opt sel" id="hostCause" onclick="setHost('cause')">
-          <div class="ro-t">The Cause</div><div class="ro-s">They confirm details &amp; print the QR</div>
+          <div class="ro-t">The Cause</div><div class="ro-s">They fine-tune the pin &amp; get the QR</div>
         </div>
         <div class="radio-opt" id="hostSelf" onclick="setHost('self')">
-          <div class="ro-t">We are</div><div class="ro-s">Skip ahead, get the QR now</div>
+          <div class="ro-t">EARNT does</div><div class="ro-s">Skip ahead, get the QR now</div>
         </div>
       </div>
       <div id="causeFields">
         <label>Cause contact name</label>
-        <input type="text" id="nCauseContactName" placeholder="Who EARNT/you will send the link to">
+        <input type="text" id="nCauseContactName" placeholder="Who EARNT will send the link to">
         <label>Cause contact email</label>
         <input type="email" id="nCauseContactEmail" placeholder="them@thecause.org">
         <label>Confirm cause contact email</label>
         <input type="email" id="nCauseContactEmailConfirm" placeholder="Re-enter to confirm">
       </div>
       <div id="selfFields" class="hidden">
-        <label>Site address</label>
-        <div class="addr-row">
-          <input type="text" id="nAddress" placeholder="Start typing an address…" style="flex:1">
-          ${countrySelectHTML('nCountry', 'gb')}
-        </div>
-        ${!mapsReady ? '<div class="mono muted" style="font-size:.6rem;margin-top:6px">Address autocomplete isn\'t configured yet — type the address manually.</div>' : ''}
-        <label>Directions / how to find us</label>
-        <textarea id="nDirections" placeholder="e.g. Enter via the side gate, no signage on the main door"></textarea>
         <div class="btn-row" style="margin-top:6px">
-          <button class="btn btn-sm btn-ghost" style="flex:1" onclick="pinHere()">📍 Pin my current location</button>
+          <button class="btn btn-sm btn-ghost" style="flex:1" onclick="pinHere()">📍 Pin current location</button>
         </div>
         <div class="mono muted" id="nPin" style="font-size:.66rem;margin-top:8px">${pendingPin ? `<span class="gps-ok">✓ Pinned</span> ${pendingPin.lat}, ${pendingPin.lng} · <a href="${mapsLink(pendingPin.lat,pendingPin.lng)}" target="_blank" style="color:inherit">View on map ↗</a>` : 'No pin yet — you can add one later too.'}</div>
         ${pinMapHTML('nPinMap')}
@@ -933,16 +958,17 @@ function createJob() {
   if (!name) return toast('Give the job a name');
   if (!cause) return toast('Who is this job for?');
   const id = newId();
-  const brandId = isAdmin ? null : currentBrandId;
-  const brandName = isAdmin ? 'EARNT' : brands[currentBrandId].name;
+  const brandVal = $('nBrandSelect').value;
+  const brandId = brandVal || null;
+  const brandName = brandVal ? brands[brandVal].name : 'EARNT';
+  const address = $('nAddress').value.trim(), directions = $('nDirections').value.trim();
   const base = {
     brandId, brandName, name, cause,
-    date: $('nDate').value, notes: $('nNotes').value.trim(),
+    date: $('nDate').value, notes: $('nNotes').value.trim(), address, directions,
     createdAt: Date.now(), checkins: {}, photos: {}
   };
   if (hostChoice === 'self') {
     saveJob(id, {...base, hostedBy:'brand', status:'confirmed', confirmedAt:Date.now(),
-      address: $('nAddress').value.trim(), directions: $('nDirections').value.trim(),
       lat: pendingPin?pendingPin.lat:null, lng: pendingPin?pendingPin.lng:null});
     pendingPin = null;
     toast('Job created — here\'s its QR code'); go('qr/' + id);
@@ -955,7 +981,7 @@ function createJob() {
     }
     saveJob(id, {...base, hostedBy:'cause', status:'awaiting_cause',
       causeContactName: $('nCauseContactName').value.trim(), causeContactEmail: causeEmail,
-      address:'', lat:null, lng:null});
+      lat:null, lng:null});
     toast('Job created — send it to the Cause to confirm'); go('cause/' + id);
   }
 }
@@ -1040,6 +1066,7 @@ function saveEditJob(id) {
 function renderCause(app, id) {
   const j = jobs[id];
   if (!j) { app.innerHTML = '<div class="card" style="margin-top:20px">Job not found.</div>'; return; }
+  if (currentBrandId && !isAdmin && j.brandId === currentBrandId) { go('report/' + id); return; }
   if (jobStage(j) !== 'awaiting_cause') { go('qr/' + id); return; }
   $('hdrSub').textContent = 'Confirm job';
   causePin = j.lat != null ? {lat:j.lat, lng:j.lng} : null;
@@ -1071,7 +1098,7 @@ function renderCause(app, id) {
         ${countrySelectHTML('cCountry', 'gb')}
       </div>
       ${!mapsReady ? '<div class="mono muted" style="font-size:.6rem;margin-top:6px">Address autocomplete isn\'t configured yet — type the address manually, then pin your exact location below.</div>' : ''}
-      <label>Directions / how to find us</label>
+      <label>Directions / how to find us *</label>
       <textarea id="cDirections" placeholder="e.g. Enter via the side gate, no signage on the main door">${esc(j.directions||'')}</textarea>
       <label>Pin your exact location *</label>
       <div class="btn-row"><button class="btn btn-sm btn-ghost" style="flex:1" onclick="pinCause()">📍 Pin current location</button></div>
@@ -1119,9 +1146,11 @@ function confirmCause(id) {
   if (!name) return toast('Job needs a name');
   const address = $('cAddress').value.trim();
   if (!address) return toast('Add a site address');
+  const directions = $('cDirections').value.trim();
+  if (!directions) return toast('Add directions for volunteers before confirming — how do they actually find you?');
   if (!causePin) return toast('Pin your exact location before confirming — tap "Pin current location" above');
   const j = jobs[id];
-  saveJob(id, {...j, name, date: $('cDate').value, address, directions: $('cDirections').value.trim(), notes: $('cNotes').value.trim(),
+  saveJob(id, {...j, name, date: $('cDate').value, address, directions, notes: $('cNotes').value.trim(),
     lat: causePin.lat, lng: causePin.lng,
     status:'confirmed', confirmedAt: Date.now()});
   causePin = null;
@@ -1136,10 +1165,11 @@ function declineCause(id) {
 function renderQR(app, id) {
   const j = jobs[id];
   if (!j) { app.innerHTML = '<div class="card" style="margin-top:20px">Job not found.</div>'; return; }
+  if (currentBrandId && !isAdmin && j.brandId === currentBrandId) { go('report/' + id); return; }
   if (jobStage(j) === 'awaiting_cause') { go('cause/' + id); return; }
   $('hdrSub').textContent = 'QR & roster';
   const link = checkinUrl(id);
-  const photos = Object.entries(j.photos||{}).map(([k,v]) => ({id:k, ...v}));
+  const photos = Object.entries(j.photos||{}).map(([k,v]) => ({id:k, ...v})).filter(ph => !hiddenIds.has('photo:'+id+'::'+ph.id));
   const storyPhotos = p => photos.filter(x => x.phase===p).sort((a,b) => a.at-b.at);
   const gallerySection = () => {
     const phases = [['before','Before'],['during','During'],['after','After']];
@@ -1148,7 +1178,7 @@ function renderQR(app, id) {
     return `<div class="card no-print"><h2>Photo Evidence</h2>${phases.map(([p,title]) => {
       const list = storyPhotos(p); if (!list.length) return '';
       return `<div class="mono muted" style="font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;margin:10px 0 6px">${title} (${list.length})</div>
-        <div class="photo-grid">${list.map(ph => `<img src="${ph.data}" loading="lazy" onclick="openLightbox(this.src,'${title.toUpperCase()} · ${fmtTime(ph.at)} · ${esc(ph.by)}')">`).join('')}</div>`;
+        <div class="photo-grid">${list.map(ph => photoThumb(id, ph, title.toUpperCase()+' · '+fmtTime(ph.at)+' · '+esc(ph.by))).join('')}</div>`;
     }).join('')}</div>`;
   };
 
@@ -1178,7 +1208,7 @@ function renderQR(app, id) {
     ${isAdmin || (currentBrandId && j.brandId===currentBrandId) ? `<div style="height:10px" class="no-print"></div>
     <button class="btn btn-ghost no-print" onclick="go('report/${id}')">View Client Report</button>` : ''}
     <div class="no-print">${gallerySection()}</div>
-    <div class="no-print">${rosterSection(j, id, {canVerify:true, canRelease:isAdmin, canExport:isAdmin || (currentBrandId && j.brandId===currentBrandId)})}</div>
+    <div class="no-print">${rosterSection(j, id, {canVerify:true, canRelease:isAdmin, canExport:isAdmin, canDeleteCheckin:isAdmin})}</div>
     ${isAdmin ? `<div class="no-print">${activityLogSection(j, id)}</div>` : ''}
     <button class="link-btn no-print" style="display:block;margin:12px auto" onclick="go('')">← All jobs</button>`;
 
@@ -1235,44 +1265,49 @@ function activityLogSection(j, id) {
   </div>`;
 }
 
+function firstNameOf(name) { return (name||'').trim().split(/\s+/)[0] || name; }
 function rosterSection(j, id, opts) {
-  const cis = Object.entries(j.checkins||{}).sort((a,b) => a[1].inAt - b[1].inAt);
+  const allCis = Object.entries(j.checkins||{}).filter(([key]) => !hiddenIds.has('checkin:'+id+'::'+key)).sort((a,b) => a[1].inAt - b[1].inAt);
   const legend = `<div class="legend-box"><b>Verified</b>The Cause has confirmed this check-in was genuine, based on the photo and location logged.
     An Earned Thank You can't be marked released until it's verified.</div>`;
-  if (!cis.length) return `<div class="card"><h2>Roster</h2>${legend}<div class="muted" style="font-size:.82rem">No check-ins yet.</div></div>`;
+  if (!allCis.length) return `<div class="card"><h2>Roster</h2>${legend}<div class="muted" style="font-size:.82rem">No check-ins yet.</div></div>`;
   const photos = j.photos||{};
-  const outCount = cis.filter(([,c]) => c.outAt).length;
-  const verifiedCount = cis.filter(([,c]) => c.verified).length;
-  const releasedCount = cis.filter(([,c]) => c.rewardReleased).length;
+  const outCount = allCis.filter(([,c]) => c.outAt).length;
+  const verifiedCount = allCis.filter(([,c]) => c.verified).length;
+  const releasedCount = allCis.filter(([,c]) => c.rewardReleased).length;
   const allReconciled = outCount > 0 && verifiedCount === outCount && releasedCount === outCount;
   const summary = `<div class="legend-box" style="background:${allReconciled?'var(--go-light)':'var(--pending-light)'};border-color:${allReconciled?'var(--go)':'var(--pending)'}">
     <b style="color:${allReconciled?'var(--go)':'var(--pending)'}">${allReconciled?'✓ Fully reconciled':'Checker'}</b>
-    ${cis.length} checked in · ${outCount} checked out · ${verifiedCount} of ${outCount} verified · ${releasedCount} of ${outCount} ETY released
+    ${allCis.length} checked in · ${outCount} checked out · ${verifiedCount} of ${outCount} verified · ${releasedCount} of ${outCount} ETY released
   </div>`;
-  const exportBtn = (opts.canRelease || opts.canExport) ? `<button class="btn btn-sm btn-ghost" style="width:100%;margin-bottom:12px" onclick="exportJobCSV('${id}')">⬇ Export Roster as CSV</button>` : '';
-  return `<div class="card"><h2>Roster</h2>${legend}${summary}${exportBtn}${cis.map(([key,c]) => {
+  const exportBtn = opts.canExport ? `<button class="btn btn-sm btn-ghost" style="width:100%;margin-bottom:12px" onclick="exportJobCSV('${id}')">⬇ Export Roster as CSV</button>` : '';
+  const cis = opts.onlyVerified ? allCis.filter(([,c]) => c.verified) : allCis;
+  const redact = !!opts.redactPersonalDetails;
+  const rows = cis.length ? cis.map(([key,c]) => {
     const inP = c.inPhotoId && photos[c.inPhotoId], outP = c.outPhotoId && photos[c.outPhotoId];
     return `<div class="roster-row">
       <div class="rr-top">
-        <div><div class="rr-name">${esc(c.name)}</div>
-          <div class="rr-time">${c.phone ? esc(c.phone) + ' · ' : ''}In ${fmtTime(c.inAt)}${c.outAt ? ' → Out '+fmtTime(c.outAt)+' ('+fmtDur(c.outAt-c.inAt)+')' : ' · <span class="gps-ok">on site</span>'}</div>
-          <div class="rr-time">${gpsLine(j, c.inLat, c.inLng)}</div>
+        <div><div class="rr-name">${esc(redact ? firstNameOf(c.name) : c.name)}</div>
+          <div class="rr-time">${!redact && c.phone ? esc(c.phone) + ' · ' : ''}In ${fmtTime(c.inAt)}${c.outAt ? ' → Out '+fmtTime(c.outAt)+' ('+fmtDur(c.outAt-c.inAt)+')' : ' · <span class="gps-ok">on site</span>'}</div>
+          ${!redact ? `<div class="rr-time">${gpsLine(j, c.inLat, c.inLng)}</div>` : ''}
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
           ${c.verified ? '<span class="badge badge-verified">✓ Verified</span>' : '<span class="badge badge-unverified">Unverified</span>'}
-          ${opts.canRelease && c.rewardReleased ? '<span class="badge badge-released">ETY released</span>' : ''}
+          ${c.rewardReleased ? '<span class="badge badge-released">ETY released</span>' : ''}
         </div>
       </div>
-      ${(inP && inP.data) || (outP && outP.data) ? `<div class="roster-photos">
+      ${!redact && ((inP && inP.data) || (outP && outP.data)) ? `<div class="roster-photos">
         ${inP && inP.data ? `<img src="${inP.data}" onclick="openLightbox(this.src,'Check-in proof · ${fmtTime(c.inAt)}')">` : ''}
         ${outP && outP.data ? `<img src="${outP.data}" onclick="openLightbox(this.src,'Check-out proof · ${fmtTime(c.outAt)}')">` : ''}
       </div>` : ''}
       <div class="btn-row" style="margin-top:10px">
         ${opts.canVerify && c.outAt ? `<button class="toggle-btn ${c.verified?'on':''}" onclick="toggleVerified('${id}','${key}')">${c.verified?'✓ Verified':'Mark Verified'}</button>` : ''}
         ${opts.canRelease && c.verified ? `<button class="toggle-btn reward ${c.rewardReleased?'on':''}" onclick="toggleReward('${id}','${key}')">${c.rewardReleased?'✓ ETY Released':'Mark ETY Released'}</button>` : ''}
+        ${opts.canDeleteCheckin ? `<button class="toggle-btn" style="border-color:var(--stop);color:var(--stop)" onclick="requestDelete('checkin','${id}::${key}','${esc(c.name).replace(/'/g,"\\'")}',()=>deleteCheckin('${id}','${key}'))">Delete Volunteer</button>` : ''}
       </div>
     </div>`;
-  }).join('')}</div>`;
+  }).join('') : `<div class="muted" style="font-size:.82rem;padding:6px 0">No verified volunteers to show yet — check back once EARNT or the Cause has verified some check-ins.</div>`;
+  return `<div class="card"><h2>Roster</h2>${legend}${summary}${exportBtn}${rows}</div>`;
 }
 function toggleVerified(jobId, key) {
   const c = jobs[jobId].checkins[key];
@@ -1442,7 +1477,8 @@ function renderReport(app, id) {
   const j = jobs[id];
   if (!j) { app.innerHTML = '<div class="card" style="margin-top:20px">Report not found.</div>'; return; }
   $('hdrSub').textContent = 'Client report';
-  const photos = Object.entries(j.photos||{}).map(([k,v]) => ({id:k, ...v}));
+  const brandView = !isAdmin && currentBrandId && j.brandId === currentBrandId;
+  const photos = Object.entries(j.photos||{}).map(([k,v]) => ({id:k, ...v})).filter(ph => !hiddenIds.has('photo:'+id+'::'+ph.id));
   const phasePhotos = p => photos.filter(x => x.phase===p).sort((a,b) => a.at-b.at);
   const cis = Object.values(j.checkins||{});
   const firstIn = cis.length ? Math.min(...cis.map(c => c.inAt)) : null;
@@ -1454,7 +1490,7 @@ function renderReport(app, id) {
     const list = phasePhotos(p); if (!list.length) return '';
     return `<div style="margin-bottom:18px"><div style="display:flex;justify-content:space-between;border-bottom:1.5px solid var(--ink);padding-bottom:6px;margin-bottom:10px"><h2 style="margin:0">${title}</h2>
       <span class="mono muted" style="font-size:.66rem">${list.length} photo${list.length>1?'s':''}</span></div>
-      <div class="photo-grid" style="grid-template-columns:repeat(2,1fr)">${list.map(ph => `<img src="${ph.data}" loading="lazy" onclick="openLightbox(this.src,'${title.toUpperCase()} · ${fmtTime(ph.at)}')">`).join('')}</div></div>`;
+      <div class="photo-grid" style="grid-template-columns:repeat(2,1fr)">${list.map(ph => photoThumb(id, ph, title.toUpperCase()+' · '+fmtTime(ph.at))).join('')}</div></div>`;
   };
 
   app.innerHTML = `
@@ -1475,7 +1511,8 @@ function renderReport(app, id) {
       ${viewMapHTML('reportViewMap', j.lat, j.lng)}</div>` : ''}
     ${section('before','Before')}${section('during','During')}${section('after','After')}
     ${!photos.length ? '<div class="card muted" style="text-align:center">No photos yet.</div>' : ''}
-    ${rosterSection(j, id, {canVerify:isAdmin, canRelease:isAdmin, canExport:isAdmin || (currentBrandId && j.brandId===currentBrandId)})}
+    ${rosterSection(j, id, {canVerify:isAdmin, canRelease:isAdmin, canExport:isAdmin, canDeleteCheckin:isAdmin,
+      onlyVerified: brandView, redactPersonalDetails: brandView})}
     ${isAdmin ? activityLogSection(j, id) : ''}
     <div class="footer-mark">Verified by EARNT · Actions speak louder than money</div>`;
   initViewMap('reportViewMap', j.lat, j.lng);
