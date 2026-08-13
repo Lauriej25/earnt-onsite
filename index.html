@@ -408,12 +408,13 @@ function newBrandId() { return DEMO ? 'b' + Math.random().toString(36).slice(2, 
 const hiddenIds = new Set();
 let pendingDelete = null;
 function requestDelete(kind, id, label, doDelete) {
-  if (!confirm(`Delete "${label}"? You'll have 15 seconds to undo this before it's gone for good.`)) return;
+  if (!confirm(`Delete "${label}"? You'll have 15 seconds to undo this before it's gone for good.`)) return false;
   if (pendingDelete) finalizePendingDelete();
   hiddenIds.add(kind + ':' + id);
   pendingDelete = {kind, id, label, doDelete, secondsLeft: 15, timer: null};
   render();
   tickUndoBar();
+  return true;
 }
 function tickUndoBar() {
   if (!pendingDelete) return;
@@ -447,6 +448,7 @@ let openModalBrandId = null;
 function openBrandJobsModal(brandId) {
   const b = brands[brandId]; if (!b) return;
   openModalBrandId = brandId;
+  resetCodeShown = null;
   $('modalTitle').textContent = b.name;
   renderBrandJobsModalBody(brandId);
   $('modalOverlay').classList.add('open');
@@ -455,6 +457,7 @@ function closeModal() { openModalBrandId = null; $('modalOverlay').classList.rem
 function renderBrandJobsModalBody(brandId) {
   const b = brands[brandId];
   if (!b) { $('modalBody').innerHTML = '<div class="muted">This brand no longer exists.</div>'; return; }
+  const safeBrandName = esc(b.name).replace(/'/g,"\\'");
   const ids = Object.keys(jobs).filter(id => jobs[id].brandId===brandId && !hiddenIds.has('job:'+id));
   const current = ids.filter(id => jobStage(jobs[id]) !== 'completed');
   const past = ids.filter(id => jobStage(jobs[id]) === 'completed');
@@ -470,23 +473,26 @@ function renderBrandJobsModalBody(brandId) {
       <div class="sf-label">Jobs</div>
       <div class="sf-value">${ids.length} total · ${current.length} current · ${past.length} completed</div>
     </div>`;
+  const actions = `${resetCodeShown === brandId ? `<div class="code-box" style="margin:12px 0 0">${esc(resetCodeShown_value)}</div>
+      <div class="mono muted" style="font-size:.58rem;margin-bottom:8px">New code — share it now, it won't be shown again.</div>` : ''}
+    <div class="btn-row" style="margin-top:12px">
+      <button class="toggle-btn" style="flex:1" onclick="resetBrandCode('${brandId}')">Reset Code</button>
+      <button class="toggle-btn" style="flex:1;border-color:var(--stop);color:var(--stop)" onclick="closeModal();requestDelete('brand','${brandId}','${safeBrandName}',()=>deleteBrand('${brandId}'))">Delete Brand</button>
+    </div>`;
   const row = id => {
     const j = jobs[id], st = jobStage(j);
     const label = st==='awaiting_cause' ? 'Awaiting cause' : st==='completed' ? 'Complete' : jobActivity(j)==='live' ? 'On site now' : 'Not started';
-    const safeName = esc(j.name).replace(/'/g,"\\'");
     return `<div class="modal-job-row">
       <div style="min-width:0;cursor:pointer" onclick="closeModal();go('${st==='awaiting_cause'?'cause':'qr'}/${id}')">
         <div class="mj-name">${esc(j.name)}</div>
         <div class="mj-meta">${esc(j.cause||'')}${j.date?' · '+esc(j.date):''} · ${label}</div>
       </div>
-      <div style="display:flex;gap:6px;flex-shrink:0">
-        <button class="toggle-btn" onclick="closeModal();go('edit/${id}')">Edit</button>
-        <button class="toggle-btn" style="border-color:var(--stop);color:var(--stop)" onclick="requestDelete('job','${id}','${safeName}',()=>deleteJob('${id}'))">Delete</button>
-      </div>
+      <button class="toggle-btn" style="flex-shrink:0" onclick="closeModal();go('edit/${id}')">Edit</button>
     </div>`;
   };
   $('modalBody').innerHTML = `
     ${details}
+    ${actions}
     <h2 style="margin:18px 0 8px">Current</h2>
     ${current.length ? current.map(row).join('') : '<div class="muted" style="font-size:.8rem;margin-bottom:16px">None right now.</div>'}
     <h2 style="margin:18px 0 8px">Past</h2>
@@ -796,20 +802,11 @@ function renderHome(app) {
       const bIds = Object.keys(brands).filter(id => !hiddenIds.has('brand:'+id));
       body += bIds.length ? bIds.map(id => {
         const jobCount = Object.keys(jobs).filter(jid => jobs[jid].brandId===id).length;
-        const safeName = esc(brands[id].name).replace(/'/g,"\\'");
-        return `<div class="brand-row" style="flex-direction:column;align-items:stretch;gap:8px">
-        <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="openBrandJobsModal('${id}')">
+        return `<div class="brand-row" style="cursor:pointer" onclick="openBrandJobsModal('${id}')">
           <div><div style="font-weight:700;font-size:.88rem">${esc(brands[id].name)}</div>
             <div class="mono muted" style="font-size:.62rem">${esc(brands[id].contact||'')} · ${jobCount} job${jobCount!==1?'s':''}</div></div>
           <span class="mono muted" style="font-size:1rem">›</span>
-        </div>
-        ${resetCodeShown === id ? `<div class="code-box" style="margin:0">${esc(resetCodeShown_value)}</div>
-          <div class="mono muted" style="font-size:.58rem">New code — share it now, it won't be shown again.</div>` : ''}
-        <div class="btn-row">
-          <button class="toggle-btn" style="flex:1" onclick="resetBrandCode('${id}')">Reset Code</button>
-          <button class="toggle-btn" style="flex:1;border-color:var(--stop);color:var(--stop)" onclick="requestDelete('brand','${id}','${safeName}',()=>deleteBrand('${id}'))">Delete Brand</button>
-        </div>
-      </div>`;
+        </div>`;
       }).join('') : '<div class="muted" style="font-size:.82rem">No brand accounts yet.</div>';
       body += `</div>
         <div class="card">
@@ -1005,7 +1002,8 @@ function renderEditJob(app, id) {
       <textarea id="eNotes">${esc(j.notes||'')}</textarea>
     </div>
     <button class="btn btn-hivis" onclick="saveEditJob('${id}')">Save Changes</button>
-    <button class="link-btn" onclick="go('qr/${id}')" style="display:block;margin:12px auto">View Job →</button>`;
+    <button class="link-btn" onclick="go('qr/${id}')" style="display:block;margin:12px auto">View Job →</button>
+    <button class="btn btn-ghost" style="border-color:var(--stop);color:var(--stop);margin-top:14px" onclick="if(requestDelete('job','${id}','${esc(j.name).replace(/'/g,"\\'")}',()=>deleteJob('${id}'))) go('')">Delete Job</button>`;
   initAddressAutocomplete('eAddress', 'eCountry', p => {
     editPin = {lat:p.lat, lng:p.lng};
     $('eAddress').value = p.address;
