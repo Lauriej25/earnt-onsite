@@ -19,15 +19,21 @@
   html{font-size:16px}
   body{font-family:'Archivo',system-ui,sans-serif;background:var(--paper);color:var(--ink);min-height:100vh}
   .wrap{max-width:520px;margin:0 auto;padding:0 16px 96px}
-  header{position:sticky;top:0;z-index:20;background:var(--ink);color:#fff;padding:14px 16px;
-    display:flex;align-items:center;justify-content:space-between;gap:10px}
-  .wordmark{font-family:'Archivo Black';font-size:1.1rem;letter-spacing:.06em;cursor:pointer;user-select:none;white-space:nowrap}
+  header{position:sticky;top:0;z-index:20;background:var(--ink);color:#fff;padding:10px 14px;
+    display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px}
+  .hdr-title{text-align:center;cursor:pointer;user-select:none;min-width:0}
+  .wordmark{font-family:'Archivo Black';font-size:1.05rem;letter-spacing:.06em;white-space:nowrap}
   .wordmark span{color:var(--hivis)}
-  .hdr-sub{font-family:'IBM Plex Mono';font-size:.6rem;letter-spacing:.12em;color:#bdbcb4;text-transform:uppercase}
+  .hdr-sub{font-family:'IBM Plex Mono';font-size:.58rem;letter-spacing:.1em;color:#bdbcb4;text-transform:uppercase}
+  .hdr-side{display:flex;flex-direction:column;gap:2px;min-width:0}
   .role-pill{font-family:'IBM Plex Mono';font-size:.58rem;background:var(--hivis);color:var(--ink);
-    padding:4px 9px;border-radius:99px;font-weight:600;letter-spacing:.05em;white-space:nowrap}
-  .back-btn{background:none;border:none;color:#fff;font-size:1.3rem;line-height:1;cursor:pointer;
-    padding:4px 6px 4px 0;flex-shrink:0}
+    padding:4px 9px;border-radius:99px;font-weight:600;letter-spacing:.05em;white-space:nowrap;align-self:end}
+  .back-btn{background:rgba(255,255,255,.14);border:none;color:#fff;font-size:1.35rem;line-height:1;cursor:pointer;
+    width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    justify-self:start;flex-shrink:0}
+  .back-btn:active{background:rgba(255,255,255,.28)}
+  .header-signout{background:none;border:none;color:#bdbcb4;font-family:'IBM Plex Mono';font-size:.6rem;
+    text-decoration:underline;cursor:pointer;padding:0;align-self:end}
   .legend-box{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;
     margin-bottom:12px;font-size:.74rem;line-height:1.5}
   .legend-box b{display:block;font-family:'IBM Plex Mono';font-size:.58rem;letter-spacing:.1em;
@@ -188,11 +194,11 @@
 <body>
 <header>
   <button class="back-btn no-print" id="backBtn" onclick="goBack()" aria-label="Back">‹</button>
-  <div style="flex:1;min-width:0">
-    <div class="wordmark" onclick="go('')">EARNT<span>·</span>ON SITE</div>
+  <div class="hdr-title" onclick="go('')">
+    <div class="wordmark">EARNT<span>·</span>ON SITE</div>
     <div class="hdr-sub" id="hdrSub">Volunteer check-in</div>
   </div>
-  <div id="hdrRight"></div>
+  <div id="hdrRight" class="hdr-side"></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="toast" id="toast"></div>
@@ -298,9 +304,10 @@ function movePinMap(instance, lat, lng) {
   instance.map.panTo({lat,lng});
   instance.map.setZoom(16);
 }
-function pinMapHTML(divId) {
+function pinMapHTML(divId, confirmFn) {
   return mapsReady ? `<div id="${divId}" style="height:200px;border-radius:10px;overflow:hidden;margin-top:10px;border:1px solid var(--line)"></div>
-    <div class="mono muted" style="font-size:.58rem;margin-top:4px">Drag the pin, or tap anywhere on the map, to fine-tune the exact spot.</div>` : '';
+    <div class="mono muted" style="font-size:.58rem;margin-top:4px">Drag the pin, or tap anywhere on the map, to fine-tune the exact spot.</div>
+    <button class="btn btn-sm btn-ghost" style="width:100%;margin-top:8px" onclick="${confirmFn}()">✓ Confirm Pin Position</button>` : '';
 }
 
 /* Small read-only map preview for pages that just need to SHOW a site
@@ -333,12 +340,14 @@ let isAdmin = false, adminGateOpen = false;
 let currentBrandId = null, brandGateOpen = false;
 let volunteerName = null;
 let volunteerPhone = null;
+let volunteerEmail = null;
 let currentPhase = 'before';
 let activeJobId = null;
 let captureIntent = 'gallery'; // 'gallery' | 'checkin' | 'checkout'
 let pendingCheckin = null;
 let pendingCheckout = null;
 let pendingPin = null;
+function confirmPinNew() { if (!pendingPin) return toast('Place a pin on the map first'); toast('✓ Pin confirmed at ' + pendingPin.lat + ', ' + pendingPin.lng); }
 let newJobMapInstance = null;
 let hostChoice = 'cause'; // 'cause' | 'self' — used on the New Job form
 
@@ -363,7 +372,7 @@ if (!DEMO) {
       hostedBy: 'cause', status: 'confirmed',
       createdAt: now - 86400000, confirmedAt: now - 80000000,
       checkins: {
-        v1: { name: 'Alex Turner', phone: '07700 900123', inAt: now - 14400000, inLat: 51.4817, inLng: -0.2250, inAcc: 12, inPhotoId: 'p1',
+        v1: { name: 'Alex Turner', phone: '07700 900123', email: 'alex.turner@example.com', inAt: now - 14400000, inLat: 51.4817, inLng: -0.2250, inAcc: 12, inPhotoId: 'p1',
               outAt: now - 400000, outLat: 51.4817, outLng: -0.2250, outAcc: 10, outPhotoId: 'p2', verified: true, verifiedAt: now - 300000, rewardReleased: false }
       },
       photos: {
@@ -542,7 +551,7 @@ function jobActivity(job) {
 }
 function checkinUrl(id) { return location.origin + location.pathname + '#job/' + id; }
 function causeUrl(id) { return location.origin + location.pathname + '#cause/' + id; }
-function mapsLink(lat, lng) { return 'https://www.google.com/maps?q=' + lat + ',' + lng; }
+function mapsLink(lat, lng, label) { return 'https://www.google.com/maps?q=' + lat + ',' + lng + '(' + encodeURIComponent(label || 'Meeting Point') + ')'; }
 function photoThumb(jobId, ph, label) {
   const del = isAdmin ? `<button class="photo-del" onclick="event.stopPropagation();requestDelete('photo','${jobId}::${ph.id}','photo',()=>deletePhoto('${jobId}','${ph.id}'))">✕</button>` : '';
   return `<div class="photo-wrap"><img src="${ph.data}" loading="lazy" onclick="openLightbox(this.src,'${label}')">${del}</div>`;
@@ -607,6 +616,8 @@ function restoreVolunteerName() {
   if (n) volunteerName = n;
   const p = localStorage.getItem('earnt_volunteer_phone');
   if (p) volunteerPhone = p;
+  const e = localStorage.getItem('earnt_volunteer_email');
+  if (e) volunteerEmail = e;
 }
 function setVolunteerName(name) {
   volunteerName = name;
@@ -616,10 +627,15 @@ function setVolunteerPhone(phone) {
   volunteerPhone = phone;
   localStorage.setItem('earnt_volunteer_phone', phone);
 }
+function setVolunteerEmail(email) {
+  volunteerEmail = email;
+  localStorage.setItem('earnt_volunteer_email', email);
+}
 function clearVolunteerIdentity() {
-  volunteerName = null; volunteerPhone = null;
+  volunteerName = null; volunteerPhone = null; volunteerEmail = null;
   localStorage.removeItem('earnt_volunteer_name');
   localStorage.removeItem('earnt_volunteer_phone');
+  localStorage.removeItem('earnt_volunteer_email');
 }
 function isValidPhone(s) { return (s||'').replace(/[^\d]/g,'').length >= 7; }
 
@@ -683,11 +699,11 @@ $('photoInput').addEventListener('change', async e => {
 
   if (captureIntent === 'checkin') {
     if (!files.length || !pendingCheckin) { toast('A photo is required to check in — tap Check In to try again'); pendingCheckin = null; captureIntent = 'gallery'; render(); return; }
-    const {jobId, name, phone, gps} = pendingCheckin;
+    const {jobId, name, phone, email, gps} = pendingCheckin;
     try {
       const data = await compress(files[0]);
       const photoId = pushPath(jobId + '/photos', {phase:'proof-in', data, at:Date.now(), by:name, lat:gps.lat, lng:gps.lng, deviceId:myDeviceId});
-      pushPath(jobId + '/checkins', {name, phone, deviceId:myDeviceId, inAt:Date.now(), inLat:gps.lat, inLng:gps.lng, inAcc:gps.acc, inPhotoId:photoId, outAt:null, verified:false, rewardReleased:false});
+      pushPath(jobId + '/checkins', {name, phone, email, deviceId:myDeviceId, inAt:Date.now(), inLat:gps.lat, inLng:gps.lng, inAcc:gps.acc, inPhotoId:photoId, outAt:null, verified:false, rewardReleased:false});
       toast('Checked in ✓ Photo & location logged');
     } catch (err) { toast('Photo failed: ' + err.message); }
     pendingCheckin = null; captureIntent = 'gallery'; render(); return;
@@ -771,8 +787,8 @@ function render() {
   if (openModalBrandId) renderBrandJobsModalBody(openModalBrandId);
 }
 function updateHeaderRole() {
-  if (isAdmin) $('hdrRight').innerHTML = '<span class="role-pill">EARNT ADMIN</span>';
-  else if (currentBrandId && brands[currentBrandId]) $('hdrRight').innerHTML = `<span class="role-pill">${esc(brands[currentBrandId].name)}</span>`;
+  if (isAdmin) $('hdrRight').innerHTML = '<span class="role-pill">EARNT ADMIN</span><button class="header-signout no-print" onclick="lockAdmin()">Sign out</button>';
+  else if (currentBrandId && brands[currentBrandId]) $('hdrRight').innerHTML = `<span class="role-pill">${esc(brands[currentBrandId].name)}</span><button class="header-signout no-print" onclick="lockBrand()">Sign out</button>`;
   else if (DEMO) $('hdrRight').innerHTML = '<span class="role-pill">DEMO MODE</span>';
   else $('hdrRight').innerHTML = '';
 }
@@ -840,7 +856,6 @@ function renderHome(app) {
             <div class="mono muted" style="font-size:.62rem;text-align:center">Share this code with ${esc(lastGeneratedCode.name)} directly — it won't be shown again.</div>` : ''}
         </div>`;
     }
-    body += `<button class="link-btn" style="display:block;margin:16px auto" onclick="${isAdmin?'lockAdmin()':'lockBrand()'}">Sign out</button>`;
   } else {
     body += `<div style="margin:20px 0 14px"><div class="eyebrow">Actions speak louder than money</div><h1>Welcome</h1></div>
       <div class="card">
@@ -925,7 +940,7 @@ function renderNew(app) {
           <button class="btn btn-sm btn-ghost" style="flex:1" onclick="pinHere()">📍 Pin current location</button>
         </div>
         <div class="mono muted" id="nPin" style="font-size:.66rem;margin-top:8px">${pendingPin ? `<span class="gps-ok">✓ Pinned</span> ${pendingPin.lat}, ${pendingPin.lng} · <a href="${mapsLink(pendingPin.lat,pendingPin.lng)}" target="_blank" style="color:inherit">View on map ↗</a>` : 'No pin yet — you can add one later too.'}</div>
-        ${pinMapHTML('nPinMap')}
+        ${pinMapHTML('nPinMap', 'confirmPinNew')}
       </div>
     </div>
     <button class="btn btn-hivis" onclick="createJob()">Create Job</button>
@@ -989,6 +1004,7 @@ function createJob() {
 /* ---------- CAUSE confirmation ---------- */
 /* ---------- EDIT JOB (admin only) ---------- */
 let editPin = null, editMapInstance = null;
+function confirmPinEdit() { if (!editPin) return toast('Place a pin on the map first'); toast('✓ Pin confirmed at ' + editPin.lat + ', ' + editPin.lng); }
 function renderEditJob(app, id) {
   if (!isAdmin) { toast('Only EARNT admin can edit a job directly'); go(''); return; }
   const j = jobs[id];
@@ -999,8 +1015,8 @@ function renderEditJob(app, id) {
   app.innerHTML = `
     <div style="margin:20px 0 6px"><h1>Edit Job</h1></div>
     <div class="card">
-      <h2 style="margin-bottom:8px">Owned By</h2>
-      <div class="mono muted" style="font-size:.62rem;margin-bottom:8px">Change this to move the job to a different Brand — they'll see it the moment they next sign in.</div>
+      <h2 style="margin-bottom:8px">Which Brand?</h2>
+      <div class="mono muted" style="font-size:.62rem;margin-bottom:8px">EARNT runs the job either way — this just controls which Brand sees its progress. Change it to move the job to a different one.</div>
       <select id="eBrand" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;font-family:'Archivo';font-size:1rem;background:#fff;color:var(--ink)">
         <option value="" ${!j.brandId?'selected':''}>EARNT</option>
         ${Object.keys(brands).map(bid => `<option value="${bid}" ${j.brandId===bid?'selected':''}>${esc(brands[bid].name)}</option>`).join('')}
@@ -1023,7 +1039,7 @@ function renderEditJob(app, id) {
       <label>Pin location</label>
       <div class="btn-row"><button class="btn btn-sm btn-ghost" style="flex:1" onclick="pinEdit()">📍 Pin current location</button></div>
       <div class="mono muted" id="ePin" style="font-size:.66rem;margin-top:8px">${editPin ? `<span class="gps-ok">✓ Pinned</span> ${editPin.lat}, ${editPin.lng} · <a href="${mapsLink(editPin.lat,editPin.lng)}" target="_blank" style="color:inherit">View on map ↗</a>` : 'Not pinned.'}</div>
-      ${pinMapHTML('ePinMap')}
+      ${pinMapHTML('ePinMap', 'confirmPinEdit')}
       <label>Notes for volunteers</label>
       <textarea id="eNotes">${esc(j.notes||'')}</textarea>
     </div>
@@ -1103,7 +1119,7 @@ function renderCause(app, id) {
       <label>Pin your exact location *</label>
       <div class="btn-row"><button class="btn btn-sm btn-ghost" style="flex:1" onclick="pinCause()">📍 Pin current location</button></div>
       <div class="mono muted" id="cPin" style="font-size:.66rem;margin-top:8px">${causePin ? `<span class="gps-ok">✓ Pinned</span> ${causePin.lat}, ${causePin.lng} · <a href="${mapsLink(causePin.lat,causePin.lng)}" target="_blank" style="color:inherit">View on map ↗</a>` : 'A location pin is required before you can confirm.'}</div>
-      ${pinMapHTML('cPinMap')}
+      ${pinMapHTML('cPinMap', 'confirmPinCause')}
       <label>Notes for volunteers</label>
       <textarea id="cNotes">${esc(j.notes||'')}</textarea>
     </div>
@@ -1121,6 +1137,7 @@ function renderCause(app, id) {
   });
 }
 let causePin = null;
+function confirmPinCause() { if (!causePin) return toast('Place a pin on the map first'); toast('✓ Pin confirmed at ' + causePin.lat + ', ' + causePin.lng); }
 let causeMapInstance = null;
 function emailCause(id) {
   const j = jobs[id];
@@ -1288,7 +1305,7 @@ function rosterSection(j, id, opts) {
     return `<div class="roster-row">
       <div class="rr-top">
         <div><div class="rr-name">${esc(redact ? firstNameOf(c.name) : c.name)}</div>
-          <div class="rr-time">${!redact && c.phone ? esc(c.phone) + ' · ' : ''}In ${fmtTime(c.inAt)}${c.outAt ? ' → Out '+fmtTime(c.outAt)+' ('+fmtDur(c.outAt-c.inAt)+')' : ' · <span class="gps-ok">on site</span>'}</div>
+          <div class="rr-time">${!redact && c.phone ? esc(c.phone) + ' · ' : ''}${!redact && c.email ? esc(c.email) + ' · ' : ''}In ${fmtTime(c.inAt)}${c.outAt ? ' → Out '+fmtTime(c.outAt)+' ('+fmtDur(c.outAt-c.inAt)+')' : ' · <span class="gps-ok">on site</span>'}</div>
           ${!redact ? `<div class="rr-time">${gpsLine(j, c.inLat, c.inLng)}</div>` : ''}
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
@@ -1326,10 +1343,10 @@ function csvCell(v) {
 }
 function exportJobCSV(id) {
   const j = jobs[id];
-  const header = ['Name','Phone','Check-in Time','Check-in GPS','Check-out Time','Check-out GPS','Duration',
+  const header = ['Name','Phone','Email','Check-in Time','Check-in GPS','Check-out Time','Check-out GPS','Duration',
     'Verified','Verified At','ETY Released','Released At'];
   const rows = Object.values(j.checkins||{}).sort((a,b) => a.inAt-b.inAt).map(c => [
-    c.name, c.phone||'',
+    c.name, c.phone||'', c.email||'',
     new Date(c.inAt).toLocaleString('en-GB'), c.inLat!=null ? c.inLat+', '+c.inLng : '',
     c.outAt ? new Date(c.outAt).toLocaleString('en-GB') : '', c.outLat!=null ? c.outLat+', '+c.outLng : '',
     c.outAt ? fmtDur(c.outAt-c.inAt) : '',
@@ -1410,13 +1427,15 @@ function renderJob(app, id) {
     <div class="docket">
       <div class="docket-band ${activity==='live'?'live':''}"><span class="band-label">${bandLabel}</span></div>
       <div class="docket-body">
-        ${!volunteerName || !volunteerPhone ? `<label style="margin-top:0">Your name</label>
+        ${!volunteerName || !volunteerPhone || !volunteerEmail ? `<label style="margin-top:0">Your name</label>
           <input type="text" id="volName" placeholder="First name + surname" autocomplete="name" value="${esc(volunteerName||'')}">
           <label>Phone number</label>
           <input type="text" id="volPhone" placeholder="So we can call if we need to check in" autocomplete="tel" value="${esc(volunteerPhone||'')}">
+          <label>Email</label>
+          <input type="email" id="volEmail" placeholder="For an extra check before your ETY is released" autocomplete="email" value="${esc(volunteerEmail||'')}">
           <div class="mono muted" style="font-size:.6rem;margin-top:4px">Kept on file with your check-in — helps us confirm everyone's real details.</div>
           <div style="height:10px"></div>` : `
-          <div class="mono muted" style="font-size:.66rem;margin-bottom:10px">Signed in as <b style="color:var(--ink)">${esc(volunteerName)}</b> · ${esc(volunteerPhone)}
+          <div class="mono muted" style="font-size:.66rem;margin-bottom:10px">Signed in as <b style="color:var(--ink)">${esc(volunteerName)}</b> · ${esc(volunteerPhone)} · ${esc(volunteerEmail)}
             <button class="link-btn" onclick="clearVolunteerIdentity();render()" style="padding:0 0 0 8px">change</button></div>`}
         <div class="stamp-row">
           <div class="stamp ${me&&me.inAt?'filled':''}"><div class="s-label">Check in</div><div class="s-time">${me&&me.inAt?fmtTime(me.inAt):'--:--'}</div>
@@ -1444,18 +1463,21 @@ function renderJob(app, id) {
 function switchPhase(p) { currentPhase = p; render(); }
 
 async function beginCheckIn(jobId) {
-  if (!volunteerName || !volunteerPhone) {
+  if (!volunteerName || !volunteerPhone || !volunteerEmail) {
     const v = $('volName') ? $('volName').value.trim() : '';
     const p = $('volPhone') ? $('volPhone').value.trim() : '';
+    const em = $('volEmail') ? $('volEmail').value.trim() : '';
     if (!v) return toast('Enter your name first');
     if (!p) return toast('Enter a phone number too — we may need to call and check in');
     if (!isValidPhone(p)) return toast('That doesn\u2019t look like a valid phone number');
-    setVolunteerName(v); setVolunteerPhone(p);
+    if (!em) return toast('Enter your email too — it\u2019s a double-check before your ETY is released');
+    if (!isValidEmail(em)) return toast('That doesn\u2019t look like a valid email address');
+    setVolunteerName(v); setVolunteerPhone(p); setVolunteerEmail(em);
   }
   const btn = $('ciBtn'); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Getting location…';
   try {
     const gps = await getGPS();
-    pendingCheckin = {jobId, name: volunteerName, phone: volunteerPhone, gps};
+    pendingCheckin = {jobId, name: volunteerName, phone: volunteerPhone, email: volunteerEmail, gps};
     captureIntent = 'checkin';
     toast('Now take a quick photo to confirm you\u2019re on site', 4000);
     $('photoInput').value = ''; $('photoInput').click();
