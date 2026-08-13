@@ -194,7 +194,7 @@
 <body>
 <header>
   <button class="back-btn no-print" id="backBtn" onclick="goBack()" aria-label="Back">‹</button>
-  <div class="hdr-title" onclick="go('')">
+  <div class="hdr-title" onclick="headerLogoClick()">
     <div class="wordmark">EARNT<span>·</span>ON SITE</div>
     <div class="hdr-sub" id="hdrSub">Volunteer check-in</div>
   </div>
@@ -476,6 +476,12 @@ function openBrandJobsModal(brandId) {
   $('modalOverlay').classList.add('open');
 }
 function closeModal() { openModalBrandId = null; $('modalOverlay').classList.remove('open'); }
+function showModal(title, bodyHTML) {
+  openModalBrandId = null;
+  $('modalTitle').textContent = title;
+  $('modalBody').innerHTML = bodyHTML;
+  $('modalOverlay').classList.add('open');
+}
 function renderBrandJobsModalBody(brandId) {
   const b = brands[brandId];
   if (!b) { $('modalBody').innerHTML = '<div class="muted">This brand no longer exists.</div>'; return; }
@@ -704,7 +710,13 @@ $('photoInput').addEventListener('change', async e => {
       const data = await compress(files[0]);
       const photoId = pushPath(jobId + '/photos', {phase:'proof-in', data, at:Date.now(), by:name, lat:gps.lat, lng:gps.lng, deviceId:myDeviceId});
       pushPath(jobId + '/checkins', {name, phone, email, deviceId:myDeviceId, inAt:Date.now(), inLat:gps.lat, inLng:gps.lng, inAcc:gps.acc, inPhotoId:photoId, outAt:null, verified:false, rewardReleased:false});
-      toast('Checked in ✓ Photo & location logged');
+      const jName = (jobs[jobId] && jobs[jobId].name) || 'this project';
+      showModal('Welcome!', `<div style="text-align:center;padding:6px 0">
+        <div style="font-size:2rem">🎉</div>
+        <div style="font-weight:700;font-size:1.1rem;margin:10px 0 6px">Thanks, ${esc(firstNameOf(name))}!</div>
+        <div style="font-size:.85rem;color:var(--muted)">You're checked in for <b style="color:var(--ink)">${esc(jName)}</b>. Thank you for your support — enjoy the day.</div>
+        <button class="btn btn-hivis" style="margin-top:18px" onclick="closeModal()">Let's go</button>
+      </div>`);
     } catch (err) { toast('Photo failed: ' + err.message); }
     pendingCheckin = null; captureIntent = 'gallery'; render(); return;
   }
@@ -759,6 +771,7 @@ function go(route) {
   if (same) { render(); return; } // hashchange won't fire if the hash isn't actually changing
   location.hash = route;
 }
+function headerLogoClick() { if (isAdmin || currentBrandId) go(''); } // volunteers have nowhere else to go, by design
 function goBack() {
   isGoingBack = true;
   const prev = navHistory.pop();
@@ -1292,10 +1305,10 @@ function rosterSection(j, id, opts) {
   const outCount = allCis.filter(([,c]) => c.outAt).length;
   const verifiedCount = allCis.filter(([,c]) => c.verified).length;
   const releasedCount = allCis.filter(([,c]) => c.rewardReleased).length;
-  const allReconciled = outCount > 0 && verifiedCount === outCount && releasedCount === outCount;
+  const allReconciled = allCis.length > 0 && outCount === allCis.length && verifiedCount === allCis.length && releasedCount === allCis.length;
   const summary = `<div class="legend-box" style="background:${allReconciled?'var(--go-light)':'var(--pending-light)'};border-color:${allReconciled?'var(--go)':'var(--pending)'}">
     <b style="color:${allReconciled?'var(--go)':'var(--pending)'}">${allReconciled?'✓ Fully reconciled':'Checker'}</b>
-    ${allCis.length} checked in · ${outCount} checked out · ${verifiedCount} of ${outCount} verified · ${releasedCount} of ${outCount} ETY released
+    ${allCis.length} checked in · ${outCount} checked out · ${verifiedCount} of ${allCis.length} verified · ${releasedCount} of ${allCis.length} ETY released
   </div>`;
   const exportBtn = opts.canExport ? `<button class="btn btn-sm btn-ghost" style="width:100%;margin-bottom:12px" onclick="exportJobCSV('${id}')">⬇ Export Roster as CSV</button>` : '';
   const cis = opts.onlyVerified ? allCis.filter(([,c]) => c.verified) : allCis;
@@ -1318,7 +1331,7 @@ function rosterSection(j, id, opts) {
         ${outP && outP.data ? `<img src="${outP.data}" onclick="openLightbox(this.src,'Check-out proof · ${fmtTime(c.outAt)}')">` : ''}
       </div>` : ''}
       <div class="btn-row" style="margin-top:10px">
-        ${opts.canVerify && c.outAt ? `<button class="toggle-btn ${c.verified?'on':''}" onclick="toggleVerified('${id}','${key}')">${c.verified?'✓ Verified':'Mark Verified'}</button>` : ''}
+        ${opts.canVerify ? `<button class="toggle-btn ${c.verified?'on':''}" onclick="toggleVerified('${id}','${key}')">${c.verified?'✓ Verified':'Mark Verified'}</button>` : ''}
         ${opts.canRelease && c.verified ? `<button class="toggle-btn reward ${c.rewardReleased?'on':''}" onclick="toggleReward('${id}','${key}')">${c.rewardReleased?'✓ ETY Released':'Mark ETY Released'}</button>` : ''}
         ${opts.canDeleteCheckin ? `<button class="toggle-btn" style="border-color:var(--stop);color:var(--stop)" onclick="requestDelete('checkin','${id}::${key}','${esc(c.name).replace(/'/g,"\\'")}',()=>deleteCheckin('${id}','${key}'))">Delete Volunteer</button>` : ''}
       </div>
@@ -1373,16 +1386,14 @@ function renderJob(app, id) {
     $('hdrSub').textContent = 'Not open yet';
     app.innerHTML = `<div style="margin:20px 0 6px"><h1>${esc(j.name)}</h1></div>
       <div class="pending-card"><div class="p-icon">⏳</div><div style="font-weight:700;margin-top:6px">This job isn't open for check-in yet</div>
-      <div class="mono muted" style="font-size:.7rem;margin-top:6px">It's still waiting on the Cause to confirm details.</div></div>
-      <button class="link-btn" style="display:block;margin:12px auto" onclick="go('')">← All jobs</button>`;
+      <div class="mono muted" style="font-size:.7rem;margin-top:6px">It's still waiting on the Cause to confirm details.</div></div>`;
     return;
   }
   if (stage === 'completed') {
     $('hdrSub').textContent = 'Job complete';
     app.innerHTML = `<div style="margin:20px 0 6px"><h1>${esc(j.name)}</h1></div>
       <div class="pending-card"><div class="p-icon">✅</div><div style="font-weight:700;margin-top:6px">This job has been marked complete</div>
-      <div class="mono muted" style="font-size:.7rem;margin-top:6px">Check-in is closed. Thanks to everyone who helped.</div></div>
-      <button class="link-btn" style="display:block;margin:12px auto" onclick="go('')">← All jobs</button>`;
+      <div class="mono muted" style="font-size:.7rem;margin-top:6px">Check-in is closed. Thanks to everyone who helped.</div></div>`;
     return;
   }
 
@@ -1413,6 +1424,11 @@ function renderJob(app, id) {
   };
 
   app.innerHTML = `
+    <div style="background:var(--ink);color:#fff;border-radius:var(--radius);padding:18px;text-align:center;margin:18px 0 0">
+      <div style="font-size:1.6rem">👋</div>
+      <div style="font-family:'Archivo Black';font-size:1.05rem;text-transform:uppercase;margin:6px 0 4px">Welcome!</div>
+      <div class="mono" style="font-size:.72rem;color:#bdbcb4">Thank you for your support with ${esc(j.name)}.</div>
+    </div>
     <div style="margin:18px 0 12px">
       <div class="eyebrow">${esc(j.brandName||'')}${j.brandName && j.cause ? ' × ' : ''}${esc(j.cause||'')}</div>
       <h1>${esc(j.name)}</h1>
@@ -1443,7 +1459,7 @@ function renderJob(app, id) {
           <div class="stamp ${me&&me.outAt?'filled':''}"><div class="s-label">Check out</div><div class="s-time">${me&&me.outAt?fmtTime(me.outAt):'--:--'}</div>
             <div class="s-gps">${me&&me.outLat?gpsLine(j,me.outLat,me.outLng):''}</div></div>
         </div>
-        <div class="mono muted" style="font-size:.64rem;margin:8px 0">A quick photo is needed to check in and out — it's what EARNT uses to verify the ETY reward.</div>
+        <div class="mono muted" style="font-size:.64rem;margin:8px 0">Take a selfie or a photo of the meeting point when you check in and out — it's what EARNT uses to verify the ETY reward.</div>
         ${!me || !me.inAt
           ? `<button class="btn btn-hivis" id="ciBtn" onclick="beginCheckIn('${id}')">Check In</button>`
           : !me.outAt
@@ -1456,8 +1472,7 @@ function renderJob(app, id) {
       <div class="mono muted" style="font-size:.62rem;margin-bottom:10px">You'll only see your own photos here — the full team's story goes straight to ${esc(j.cause||'the Cause')} and EARNT.</div>
       <div class="phase-tabs">${['before','during','after'].map(p => `<button class="phase-tab ${currentPhase===p?'active':''}" onclick="switchPhase('${p}')">${p}${phasePhotos(p).length?' ('+phasePhotos(p).length+')':''}</button>`).join('')}</div>
       ${['before','during','after'].map(phaseBlock).join('')}
-    </div>
-    <button class="link-btn" style="display:block;margin:10px auto" onclick="go('')">← All jobs</button>`;
+    </div>`;
   initViewMap('jobViewMap', j.lat, j.lng);
 }
 function switchPhase(p) { currentPhase = p; render(); }
@@ -1479,7 +1494,7 @@ async function beginCheckIn(jobId) {
     const gps = await getGPS();
     pendingCheckin = {jobId, name: volunteerName, phone: volunteerPhone, email: volunteerEmail, gps};
     captureIntent = 'checkin';
-    toast('Now take a quick photo to confirm you\u2019re on site', 4000);
+    toast('Take a selfie or a photo of the meeting point to confirm you\u2019re on site', 4000);
     $('photoInput').value = ''; $('photoInput').click();
   } catch (e) { btn.disabled = false; btn.textContent = 'Check In'; toast(e.message, 4000); }
 }
@@ -1489,7 +1504,7 @@ async function beginCheckOut(jobId, key) {
     const gps = await getGPS();
     pendingCheckout = {jobId, key, gps};
     captureIntent = 'checkout';
-    toast('One more photo to confirm check-out', 4000);
+    toast('Take a selfie or a photo of the meeting point to confirm you\u2019re heading off', 4000);
     $('photoInput').value = ''; $('photoInput').click();
   } catch (e) { btn.disabled = false; btn.textContent = 'Check Out'; toast(e.message, 4000); }
 }
