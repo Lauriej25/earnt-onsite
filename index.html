@@ -77,9 +77,23 @@
   .muted{color:var(--muted)}
   .card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px}
   .job-item{display:block;width:100%;text-align:left;background:#fff;border:1px solid var(--line);
-    border-radius:var(--radius);padding:16px;margin-bottom:10px;cursor:pointer;font-family:inherit}
+    border-radius:var(--radius);padding:16px;margin-bottom:10px;cursor:pointer;font-family:inherit;position:relative}
   .job-item .name{font-weight:700;font-size:1rem}
   .job-item .meta{font-family:'IBM Plex Mono';font-size:.66rem;color:var(--muted);margin-top:4px}
+  .job-tooltip{position:absolute;top:calc(100% + 12px);left:8px;right:8px;z-index:30;
+    background:var(--ink);color:#fff;border-radius:12px;padding:14px 16px;text-align:left;
+    box-shadow:0 16px 36px rgba(0,0,0,.4);opacity:0;pointer-events:none;
+    transform:translateY(4px);transition:opacity .15s ease,transform .15s ease}
+  .job-tooltip::before{content:'';position:absolute;bottom:100%;left:24px;
+    border:7px solid transparent;border-bottom-color:var(--ink)}
+  .job-item:hover .job-tooltip,.job-item:focus-visible .job-tooltip{opacity:1;pointer-events:auto;transform:translateY(0)}
+  .job-tooltip .jt-title{font-family:'Archivo Black';font-size:.7rem;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--hivis);margin-bottom:8px}
+  .job-tooltip .jt-row{font-family:'IBM Plex Mono';font-size:.68rem;color:#e6e5df;
+    line-height:1.6;display:flex;justify-content:space-between;gap:10px}
+  .job-tooltip .jt-row b{color:#fff;font-weight:600}
+  .job-tooltip .jt-onsite{margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.15);
+    font-family:'IBM Plex Mono';font-size:.68rem;color:#e6e5df}
   .status-chip{display:inline-block;font-family:'IBM Plex Mono';font-size:.58rem;font-weight:600;
     letter-spacing:.07em;text-transform:uppercase;padding:3px 8px;border-radius:4px;margin-top:8px}
   .chip-open{background:#eeede6;color:var(--muted)}
@@ -833,6 +847,22 @@ function renderHome(app) {
     open: '<span class="status-chip chip-open">Not started</span>'
   };
   const chipFor = j => jobStage(j) === 'completed' ? chips.completed : jobStage(j) === 'awaiting_cause' ? chips.awaiting_cause : chips[jobActivity(j)];
+  const jobTooltipHTML = j => {
+    const cis = Object.values(j.checkins||{});
+    const onSite = cis.filter(c => c.inAt && !c.outAt).map(c => c.name);
+    const verifiedCount = cis.filter(c => c.verified).length;
+    const releasedCount = cis.filter(c => c.rewardReleased).length;
+    return `<div class="job-tooltip" onclick="event.stopPropagation()">
+      <div class="jt-title">${esc(j.name)}</div>
+      <div class="jt-row"><span>Brand</span><b>${esc(j.brandName||'EARNT')}</b></div>
+      <div class="jt-row"><span>Cause</span><b>${esc(j.cause||'—')}</b></div>
+      ${j.address ? `<div class="jt-row"><span>Meeting point</span><b>${esc(j.address)}</b></div>` : ''}
+      <div class="jt-row"><span>Checked in</span><b>${cis.length}</b></div>
+      <div class="jt-row"><span>Verified</span><b>${verifiedCount}</b></div>
+      <div class="jt-row"><span>ETY released</span><b>${releasedCount}</b></div>
+      <div class="jt-onsite">${onSite.length ? '\ud83d\udfe2 On site now: ' + onSite.map(n=>esc(n)).join(', ') : 'Nobody on site right now'}</div>
+    </div>`;
+  };
 
   let jobIds;
   if (isAdmin) jobIds = Object.keys(jobs);
@@ -852,11 +882,12 @@ function renderHome(app) {
       const j = jobs[id];
       const vols = Object.values(j.checkins||{}).length;
       const dest = isAdmin ? (jobStage(j)==='awaiting_cause' ? 'cause/'+id : 'qr/'+id) : 'report/'+id;
-      return `<button class="job-item" onclick="go('${dest}')">
+      return `<button class="job-item" onclick="go('${dest}')" ${isAdmin?'tabindex="0"':''}>
         <div class="name">${esc(j.name)}</div>
         <div class="meta">${isAdmin ? esc(j.brandName||'EARNT') + ' · ' : ''}${esc(j.cause||'')}</div>
         <div class="meta">${esc(dateRangeText(j))}${vols ? ' · '+vols+' volunteer'+(vols>1?'s':'') : ''}</div>
         ${chipFor(j)}
+        ${isAdmin ? jobTooltipHTML(j) : ''}
       </button>`;
     }).join('') : `<div class="card muted" style="text-align:center;padding:26px">${dataLoaded ? (currentBrandId ? 'No jobs yet — EARNT will set these up for you.' : 'No jobs yet.') : 'Loading…'}</div>`;
     if (isAdmin) body += `<div style="margin-top:16px"><button class="btn btn-ghost" onclick="go('new')">+ New Job</button></div>`;
