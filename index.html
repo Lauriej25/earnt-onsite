@@ -598,6 +598,13 @@ function renderBrandJobsModalBody(brandId) {
 /* ---------- helpers ---------- */
 const $ = id => document.getElementById(id);
 const esc = s => (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function legalLinksHTML(style) {
+  return `<div class="mono muted" style="font-size:.58rem;text-align:center;margin-top:10px;${style||''}">
+    <a href="https://earnt.co.uk/terms-of-service" target="_blank" rel="noopener" style="color:inherit">Terms of Service</a>
+    &nbsp;·&nbsp;
+    <a href="https://earnt.co.uk/privacy-policy" target="_blank" rel="noopener" style="color:inherit">Privacy Policy</a>
+  </div>`;
+}
 function toast(msg, ms = 2600) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), ms); }
 function fmtTime(ts) { return new Date(ts).toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}); }
 function fmtDate(ts) { return new Date(ts).toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'short'}); }
@@ -1118,7 +1125,7 @@ function renderHome(app) {
     </div>
     <div class="mono muted" style="font-size:.66rem;text-align:center;margin-top:10px">Volunteer? You'll get here via a link or QR code from the Cause — no sign-in needed.</div>`;
   }
-  body += `<div class="footer-mark">EARNT · Get good things done</div>`;
+  body += `<div class="footer-mark">EARNT · Get good things done</div>${legalLinksHTML()}`;
   app.innerHTML = body;
 }
 
@@ -1367,7 +1374,7 @@ function renderCause(app, id) {
       <textarea id="cNotes">${esc(j.notes||'')}</textarea>
     </div>
     <button class="btn btn-hivis" onclick="confirmCause('${id}')">Confirm &amp; Generate QR</button>
-    <button class="link-btn" onclick="declineCause('${id}')" style="display:block;margin:12px auto">Can't host this</button>`;
+    <button class="link-btn" onclick="declineCause('${id}')" style="display:block;margin:12px auto">Can't host this</button>${legalLinksHTML()}`;
   initAddressAutocomplete('cAddress', 'cCountry', p => {
     causePin = {lat:p.lat, lng:p.lng};
     $('cAddress').value = p.address;
@@ -1473,7 +1480,7 @@ function renderQR(app, id) {
     <div class="no-print">${gallerySection()}</div>
     <div class="no-print">${rosterSection(j, id, {canVerify:isAdmin, canRelease:isAdmin, canExport:isAdmin, canDeleteCheckin:isAdmin})}</div>
     ${isAdmin ? `<div class="no-print">${activityLogSection(j, id)}</div>` : ''}
-    <button class="link-btn no-print" style="display:block;margin:12px auto" onclick="go('')">← All jobs</button>`;
+    <button class="link-btn no-print" style="display:block;margin:12px auto" onclick="go('')">← All jobs</button><div class="no-print">${legalLinksHTML('')}</div>`;
 
   const box = document.getElementById('qrcanvas'); box.innerHTML = '';
   new QRCode(box, {text: link, width: 210, height: 210, colorDark:'#0B0B0A', colorLight:'#FFFFFF', correctLevel: QRCode.CorrectLevel.H});
@@ -1707,6 +1714,7 @@ function renderJob(app, id) {
             <div class="s-gps">${dr&&dr.outLat?distanceMapTrigger(j,dr.outLat,dr.outLng,'Your check-out'):''}</div></div>
         </div>
         <div class="mono muted" style="font-size:.64rem;margin:8px 0">Take a selfie or a photo of the meeting point when you check in and out — it's what EARNT uses to verify the ETY reward.</div>
+        <div class="mono muted" style="font-size:.6rem;margin:0 0 10px">By checking in you're agreeing to EARNT's <a href="https://earnt.co.uk/terms-of-service" target="_blank" rel="noopener" style="color:inherit">Terms of Service</a> and <a href="https://earnt.co.uk/privacy-policy" target="_blank" rel="noopener" style="color:inherit">Privacy Policy</a> — including EARNT sharing your details with the Brand to arrange your ETY, and photos from today being used by EARNT, the Cause and the Brand for promotion.</div>
         ${me
           ? `<button class="btn btn-ink" id="coBtn" onclick="beginCheckOut('${id}','${myKey}')">Check Out</button>`
           : outsideDates
@@ -1855,7 +1863,7 @@ function renderReport(app, id) {
     ${rosterSection(j, id, {canVerify:isAdmin, canRelease:isAdmin, canExport:isAdmin, canDeleteCheckin:isAdmin,
       onlyVerified: brandView, redactPersonalDetails: brandView})}
     ${isAdmin ? activityLogSection(j, id) : ''}
-    <div class="footer-mark">Verified by EARNT · Actions speak louder than money</div>`;
+    <div class="footer-mark">Verified by EARNT · Actions speak louder than money</div>${legalLinksHTML()}`;
   initViewMap('reportViewMap', j.lat, j.lng);
   if (jobStage(j) !== 'awaiting_cause') {
     const box = document.getElementById('reportQrCanvas');
