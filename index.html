@@ -540,8 +540,12 @@ function renderBrandJobsModalBody(brandId) {
   const past = ids.filter(id => jobStage(jobs[id]) === 'completed');
   const details = `<div class="static-field" style="margin-top:0">
       <div class="sf-label">Contact</div>
-      <div class="sf-value">${esc(b.contact || '—')}</div>
+      <div class="sf-value">${esc(b.contact || '—')}${b.phone ? ' · '+esc(b.phone) : ''}</div>
     </div>
+    ${b.website ? `<div class="static-field" style="margin-top:8px">
+      <div class="sf-label">Website</div>
+      <div class="sf-value">${esc(b.website)}</div>
+    </div>` : ''}
     <div class="static-field" style="margin-top:8px">
       <div class="sf-label">Member since</div>
       <div class="sf-value">${b.createdAt ? fmtDate(b.createdAt) : '—'}</div>
@@ -549,11 +553,26 @@ function renderBrandJobsModalBody(brandId) {
     <div class="static-field" style="margin-top:8px">
       <div class="sf-label">Jobs</div>
       <div class="sf-value">${ids.length} total · ${current.length} current · ${past.length} completed</div>
-    </div>`;
+    </div>
+    ${b.rewardNotes ? `<div class="static-field" style="margin-top:8px">
+      <div class="sf-label">Typical ETY</div>
+      <div class="sf-value">${esc(b.rewardNotes)}</div>
+    </div>` : ''}
+    ${(b.people && b.people.length) ? `<div class="static-field" style="margin-top:8px">
+      <div class="sf-label">People</div>
+      ${b.people.map(p => `<div class="sf-value" style="margin-top:4px">${esc(p.name||'')}${p.role?' — '+esc(p.role):''}${p.email?'<br>'+esc(p.email):''}${p.phone?(p.email?' · ':'<br>')+esc(p.phone):''}</div>`).join('')}
+    </div>` : ''}
+    ${b.notes ? `<div class="static-field" style="margin-top:8px">
+      <div class="sf-label">Notes</div>
+      <div class="sf-value">${esc(b.notes)}</div>
+    </div>` : ''}`;
   const actions = `${resetCodeShown === brandId ? `<div class="code-box" style="margin:12px 0 0">${esc(resetCodeShown_value)}</div>
       <div class="mono muted" style="font-size:.58rem;margin-bottom:8px">New code — share it now, it won't be shown again.</div>` : ''}
     <div class="btn-row" style="margin-top:12px">
+      <button class="toggle-btn" style="flex:1" onclick="closeModal();go('editbrand/${brandId}')">Edit Details</button>
       <button class="toggle-btn" style="flex:1" onclick="resetBrandCode('${brandId}')">Reset Code</button>
+    </div>
+    <div class="btn-row" style="margin-top:8px">
       <button class="toggle-btn" style="flex:1;border-color:var(--stop);color:var(--stop)" onclick="closeModal();requestDelete('brand','${brandId}','${safeBrandName}',()=>deleteBrand('${brandId}'))">Delete Brand</button>
     </div>`;
   const row = id => {
@@ -620,6 +639,46 @@ function gpsLine(job, lat, lng) {
   const d = Math.round(haversine(job.lat, job.lng, lat, lng));
   const within = d <= 50;
   return lat + ', ' + lng + ` · <span style="color:${within?'var(--go)':'var(--stop)'};font-weight:600">${within?'\u2713':'\u26a0'} ${d}m from meeting point</span>`;
+}
+/* Wraps gpsLine in a tappable trigger that opens a small map showing the
+   straight-line ("as the crow flies") distance between a check-in/out point
+   and the job's marked meeting point. Falls back to plain text if there's
+   nothing to compare against yet. */
+function distanceMapTrigger(job, lat, lng, label) {
+  const text = gpsLine(job, lat, lng);
+  if (lat == null || job.lat == null) return text;
+  const safeLabel = (label || 'Location').replace(/'/g, "\\'");
+  return `<span style="cursor:pointer;text-decoration:underline dotted" onclick="event.stopPropagation();showDistanceMap(${job.lat},${job.lng},${lat},${lng},'${safeLabel}')">${text}</span>`;
+}
+function showDistanceMap(jobLat, jobLng, ptLat, ptLng, label) {
+  const dist = Math.round(haversine(jobLat, jobLng, ptLat, ptLng));
+  showModal(label, `
+    <div class="mono" style="font-size:.8rem;margin-bottom:10px;text-align:center"><b>${dist}m</b> from the meeting point, as the crow flies</div>
+    ${mapsReady
+      ? `<div id="distanceMapCanvas" style="height:240px;border-radius:10px;overflow:hidden;border:1px solid var(--line)"></div>
+         <div class="mono muted" style="font-size:.58rem;margin-top:6px;text-align:center">\u26ab Meeting point &nbsp; \ud83d\udfe1 This location</div>`
+      : `<div class="mono muted" style="font-size:.68rem;text-align:center;padding:20px 0">Add a Google Maps API key to see this plotted on a map.</div>`}
+    <button class="btn btn-sm btn-ghost" style="width:100%;margin-top:12px" onclick="window.open('${mapsLink(ptLat,ptLng)}','_blank')">Open in Google Maps</button>
+  `);
+  if (mapsReady) {
+    setTimeout(() => {
+      const el = document.getElementById('distanceMapCanvas');
+      if (!el || !window.google || !google.maps) return;
+      const bounds = new google.maps.LatLngBounds();
+      bounds.extend({lat: jobLat, lng: jobLng});
+      bounds.extend({lat: ptLat, lng: ptLng});
+      const map = new google.maps.Map(el, {disableDefaultUI: true, gestureHandling: 'cooperative'});
+      map.fitBounds(bounds, 44);
+      new google.maps.Marker({position: {lat: jobLat, lng: jobLng}, map,
+        icon: {path: google.maps.SymbolPath.CIRCLE, scale: 9, fillColor: '#0B0B0A', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2}});
+      new google.maps.Marker({position: {lat: ptLat, lng: ptLng}, map,
+        icon: {path: google.maps.SymbolPath.CIRCLE, scale: 9, fillColor: '#FFD500', fillOpacity: 1, strokeColor: '#0B0B0A', strokeWeight: 2}});
+      new google.maps.Polyline({
+        path: [{lat: jobLat, lng: jobLng}, {lat: ptLat, lng: ptLng}], map, geodesic: true,
+        strokeOpacity: 0, icons: [{icon: {path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 3, strokeColor: '#B3261E'}, offset: '0', repeat: '12px'}]
+      });
+    }, 120);
+  }
 }
 
 /* ---------- auth: EARNT admin ---------- */
@@ -725,6 +784,70 @@ async function createBrand() {
   resetCodeShown = null;
   $('nbName').value = ''; $('nbContact').value = ''; $('nbContactConfirm').value = '';
   render();
+}
+
+/* ---------- EDIT BRAND (admin only) — phone, contacts list, notes ---------- */
+let editBrandPeople = [];
+function renderEditBrand(app, id) {
+  if (!isAdmin) { toast('Only EARNT admin can edit brand details'); go(''); return; }
+  const b = brands[id];
+  if (!b) { app.innerHTML = '<div class="card" style="margin-top:20px">Brand not found.</div>'; return; }
+  editBrandPeople = JSON.parse(JSON.stringify(b.people || []));
+  app.innerHTML = `
+    <div style="margin:20px 0 6px"><h1>Brand Details</h1></div>
+    <div class="card">
+      <label style="margin-top:0">Brand name</label>
+      <input type="text" id="ebName" value="${esc(b.name)}">
+      <label>Main contact email</label>
+      <input type="email" id="ebContact" value="${esc(b.contact||'')}">
+      <label>Main phone number</label>
+      <input type="text" id="ebPhone" placeholder="e.g. 020 7946 0958" value="${esc(b.phone||'')}">
+      <label>Website</label>
+      <input type="text" id="ebWebsite" placeholder="e.g. thebrowndog.co.uk" value="${esc(b.website||'')}">
+      <label>Typical ETY / reward they offer</label>
+      <textarea id="ebRewardNotes" placeholder="e.g. Free pint for a month, 20% off food">${esc(b.rewardNotes||'')}</textarea>
+      <label>Notes</label>
+      <textarea id="ebNotes" placeholder="Anything else worth knowing about this relationship">${esc(b.notes||'')}</textarea>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <h2 style="margin:0">People</h2>
+        <button class="toggle-btn" onclick="addPersonRow()">+ Add Person</button>
+      </div>
+      <div class="mono muted" style="font-size:.6rem;margin-bottom:10px">Anyone at ${esc(b.name)} worth having a direct line to.</div>
+      <div id="peopleRows">${renderPeopleRows()}</div>
+    </div>
+    <button class="btn btn-hivis" onclick="saveEditBrand('${id}')">Save Changes</button>
+    <button class="link-btn" onclick="go('')" style="display:block;margin:12px auto">Cancel</button>`;
+}
+function renderPeopleRows() {
+  if (!editBrandPeople.length) return '<div class="muted" style="font-size:.82rem">No one added yet.</div>';
+  return editBrandPeople.map((p, i) => `
+    <div class="static-field" style="margin-top:${i===0?'0':'10px'};position:relative">
+      <button class="photo-del" style="top:8px;right:8px" onclick="removePersonRow(${i})" aria-label="Remove">✕</button>
+      <label style="margin-top:0">Name</label>
+      <input type="text" value="${esc(p.name||'')}" oninput="editBrandPeople[${i}].name=this.value" placeholder="Full name">
+      <label>Role</label>
+      <input type="text" value="${esc(p.role||'')}" oninput="editBrandPeople[${i}].role=this.value" placeholder="e.g. Marketing Lead">
+      <label>Email</label>
+      <input type="email" value="${esc(p.email||'')}" oninput="editBrandPeople[${i}].email=this.value">
+      <label>Phone</label>
+      <input type="text" value="${esc(p.phone||'')}" oninput="editBrandPeople[${i}].phone=this.value">
+    </div>`).join('');
+}
+function addPersonRow() { editBrandPeople.push({name:'',role:'',email:'',phone:''}); $('peopleRows').innerHTML = renderPeopleRows(); }
+function removePersonRow(i) { editBrandPeople.splice(i,1); $('peopleRows').innerHTML = renderPeopleRows(); }
+function saveEditBrand(id) {
+  const name = $('ebName').value.trim();
+  if (!name) return toast('Brand needs a name');
+  const contact = $('ebContact').value.trim();
+  if (contact && !isValidEmail(contact)) return toast('That doesn\u2019t look like a valid email address');
+  const people = editBrandPeople.filter(p => (p.name||'').trim() || (p.email||'').trim() || (p.phone||'').trim());
+  saveBrand(id, {...brands[id], name, contact,
+    phone: $('ebPhone').value.trim(), website: $('ebWebsite').value.trim(),
+    rewardNotes: $('ebRewardNotes').value.trim(), notes: $('ebNotes').value.trim(), people});
+  toast('Brand details updated');
+  go('');
 }
 async function resetBrandCode(id) {
   if (!confirm('Reset the access code for ' + brands[id].name + '? Their old code will stop working immediately.')) return;
@@ -851,6 +974,7 @@ function render() {
   else if (h.startsWith('cause/'))  renderCause(app, h.split('/')[1]);
   else if (h.startsWith('qr/'))     renderQR(app, h.split('/')[1]);
   else if (h.startsWith('edit/'))   renderEditJob(app, h.split('/')[1]);
+  else if (h.startsWith('editbrand/')) renderEditBrand(app, h.split('/')[1]);
   else if (h.startsWith('job/'))    renderJob(app, h.split('/')[1]);
   else if (h === 'new')             renderNew(app);
   else renderHome(app);
@@ -1428,8 +1552,8 @@ function rosterSection(j, id, opts) {
       <div class="rr-top">
         <div><div class="rr-name">${esc(redact ? firstNameOf(c.name) : c.name)}</div>
           <div class="rr-time">${!redact && c.phone ? esc(c.phone) + ' · ' : ''}${!redact && c.email ? esc(c.email) + ' · ' : ''}In ${fmtTime(c.inAt)}${c.outAt ? ' → Out '+fmtTime(c.outAt)+' ('+fmtDur(c.outAt-c.inAt)+')' : ' · <span class="gps-ok">on site</span>'}</div>
-          ${!redact && c.inLat!=null ? `<div class="rr-time">In: ${gpsLine(j, c.inLat, c.inLng)}</div>` : ''}
-          ${!redact && c.outLat!=null ? `<div class="rr-time">Out: ${gpsLine(j, c.outLat, c.outLng)}</div>` : ''}
+          ${!redact && c.inLat!=null ? `<div class="rr-time">In: ${distanceMapTrigger(j, c.inLat, c.inLng, esc(c.name)+' — Check-in')}</div>` : ''}
+          ${!redact && c.outLat!=null ? `<div class="rr-time">Out: ${distanceMapTrigger(j, c.outLat, c.outLng, esc(c.name)+' — Check-out')}</div>` : ''}
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
           ${c.verified ? '<span class="badge badge-verified">✓ Verified</span>' : '<span class="badge badge-unverified">Unverified</span>'}
@@ -1437,8 +1561,8 @@ function rosterSection(j, id, opts) {
         </div>
       </div>
       ${(inP && inP.data) || (outP && outP.data) ? `<div class="roster-photos">
-        ${inP && inP.data ? `<img src="${inP.data}" onclick="openLightbox(this.src,'Check-in proof · ${fmtTime(c.inAt)}')">` : ''}
-        ${outP && outP.data ? `<img src="${outP.data}" onclick="openLightbox(this.src,'Check-out proof · ${fmtTime(c.outAt)}')">` : ''}
+        ${inP && inP.data ? photoThumb(id, inP, 'Check-in proof · '+fmtTime(c.inAt)) : ''}
+        ${outP && outP.data ? photoThumb(id, outP, 'Check-out proof · '+fmtTime(c.outAt)) : ''}
       </div>` : ''}
       <div class="btn-row" style="margin-top:10px">
         ${opts.canVerify ? `<button class="toggle-btn ${c.verified?'on':''}" onclick="toggleVerified('${id}','${key}')">${c.verified?'✓ Verified':'Mark Verified'}</button>` : ''}
@@ -1578,9 +1702,9 @@ function renderJob(app, id) {
             <button class="link-btn" onclick="beginChangeIdentity()" style="padding:0 0 0 8px">change</button></div>`}
         <div class="stamp-row">
           <div class="stamp ${me&&me.inAt?'filled':''}"><div class="s-label">Check in</div><div class="s-time">${me&&me.inAt?fmtTime(me.inAt):'--:--'}</div>
-            <div class="s-gps">${dr&&dr.inLat?gpsLine(j,dr.inLat,dr.inLng):''}</div></div>
+            <div class="s-gps">${dr&&dr.inLat?distanceMapTrigger(j,dr.inLat,dr.inLng,'Your check-in'):''}</div></div>
           <div class="stamp ${dr&&dr.outAt?'filled':''}"><div class="s-label">Check out</div><div class="s-time">${dr&&dr.outAt?fmtTime(dr.outAt):'--:--'}</div>
-            <div class="s-gps">${dr&&dr.outLat?gpsLine(j,dr.outLat,dr.outLng):''}</div></div>
+            <div class="s-gps">${dr&&dr.outLat?distanceMapTrigger(j,dr.outLat,dr.outLng,'Your check-out'):''}</div></div>
         </div>
         <div class="mono muted" style="font-size:.64rem;margin:8px 0">Take a selfie or a photo of the meeting point when you check in and out — it's what EARNT uses to verify the ETY reward.</div>
         ${me
