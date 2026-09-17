@@ -21,24 +21,39 @@
   body{font-family:'Archivo',system-ui,sans-serif;background:var(--paper);color:var(--ink);min-height:100vh}
   .wrap{max-width:520px;margin:0 auto;padding:0 16px 96px}
   header{position:sticky;top:0;z-index:20;background:var(--ink);color:#fff;padding:10px 14px;
-    display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px}
+    display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;transition:padding .15s ease}
   .hdr-title{text-align:center;cursor:pointer;user-select:none;min-width:0}
   .wordmark{font-family:'Archivo Black';font-size:1.05rem;letter-spacing:.06em;white-space:nowrap}
-  .header-logo{height:22px;width:auto;display:inline-block;vertical-align:middle}
+  .header-logo{height:22px;width:auto;display:inline-block;vertical-align:middle;transition:height .15s ease}
   .logo-row{display:flex;align-items:center;justify-content:center;gap:7px}
   .logo-suffix{font-family:'Archivo Black';letter-spacing:.06em;white-space:nowrap}
-  .brand-logo{height:34px;width:auto;display:block;margin:0 auto 10px}
+  .hdr-logo-suffix{font-size:1.05rem;transition:font-size .15s ease}
+  .brand-logo{height:34px;width:auto;display:block;margin:0 auto 10px;transition:height .15s ease}
   .wordmark span{color:var(--hivis)}
-  .hdr-sub{font-family:'IBM Plex Mono';font-size:.58rem;letter-spacing:.1em;color:#bdbcb4;text-transform:uppercase}
+  .hdr-sub{font-family:'IBM Plex Mono';font-size:.58rem;letter-spacing:.1em;color:#bdbcb4;text-transform:uppercase;transition:font-size .15s ease}
   .hdr-side{display:flex;flex-direction:column;gap:2px;min-width:0}
   .role-pill{font-family:'IBM Plex Mono';font-size:.58rem;background:var(--hivis);color:var(--ink);
     padding:4px 9px;border-radius:99px;font-weight:600;letter-spacing:.05em;white-space:nowrap;align-self:end}
   .back-btn{background:rgba(255,255,255,.14);border:none;color:#fff;font-size:1.35rem;line-height:1;cursor:pointer;
     width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-    justify-self:start;flex-shrink:0}
+    justify-self:start;flex-shrink:0;transition:width .15s ease,height .15s ease}
   .back-btn:active{background:rgba(255,255,255,.28)}
   .header-signout{background:none;border:none;color:#bdbcb4;font-family:'IBM Plex Mono';font-size:.6rem;
     text-decoration:underline;cursor:pointer;padding:0;align-self:end}
+  /* On a real monitor, the app shouldn't look like a phone screenshot stranded in the
+     middle of the screen — the header earns real presence here, sized to sit alongside
+     earnt.co.uk's own wordmark rather than staying pinned at mobile scale. */
+  @media (min-width: 860px) {
+    .wrap{max-width:760px}
+    header{padding:26px 40px}
+    .header-logo{height:40px}
+    .hdr-logo-suffix{font-size:1.8rem}
+    .hdr-sub{font-size:.76rem;letter-spacing:.14em}
+    .role-pill{font-size:.72rem;padding:6px 14px}
+    .header-signout{font-size:.7rem}
+    .back-btn{width:44px;height:44px;font-size:1.6rem}
+    .brand-logo{height:46px}
+  }
   .legend-box{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;
     margin-bottom:12px;font-size:.74rem;line-height:1.5}
   .legend-box b{display:block;font-family:'IBM Plex Mono';font-size:.58rem;letter-spacing:.1em;
@@ -221,7 +236,7 @@
   <div class="hdr-title" onclick="headerLogoClick()">
     <div class="logo-row">
       <img id="headerLogoImg" class="header-logo" alt="EARNT">
-      <span class="logo-suffix" style="font-size:1.05rem"><span style="color:var(--hivis)">·</span> ON SITE</span>
+      <span class="logo-suffix hdr-logo-suffix"><span style="color:var(--hivis)">·</span> ON SITE</span>
     </div>
     <div class="hdr-sub" id="hdrSub">Volunteer check-in</div>
   </div>
@@ -630,6 +645,25 @@ function fmtDate(ts) { return new Date(ts).toLocaleDateString('en-GB', {weekday:
 function todayStr() { const d = new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function fmtDateStr(s) { if (!s) return ''; const [y,m,d] = s.split('-'); return new Date(+y,+m-1,+d).toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'short'}); }
 function dateRangeText(j) { return (j.endDate && j.endDate !== j.date) ? (j.date + ' \u2013 ' + j.endDate) : (j.date || ''); }
+function fmtTimeOfDay(t) {
+  if (!t) return '';
+  const [h, m] = t.split(':');
+  const hh = +h, h12 = ((hh + 11) % 12) + 1;
+  return h12 + (m !== '00' ? ':' + m : '') + (hh >= 12 ? 'pm' : 'am');
+}
+function timeRangeText(j) {
+  if (j.startTime && j.endTime) return fmtTimeOfDay(j.startTime) + '\u2013' + fmtTimeOfDay(j.endTime);
+  return fmtTimeOfDay(j.startTime || j.endTime);
+}
+function dateTimeText(j) {
+  const t = timeRangeText(j);
+  return dateRangeText(j) + (t ? ' \u00b7 ' + t : '');
+}
+/* An end date earlier than the start date silently breaks check-in day-locking
+   for every volunteer on the job (the "is today in range?" check becomes
+   impossible to satisfy), so this gets caught before anything is saved —
+   in the New Job form, Edit Job, and the Cause's own confirmation screen alike. */
+function invalidDateRange(start, end) { return !!(start && end && end < start); }
 function fmtDur(ms) { const m = Math.round(ms/60000); return m < 60 ? m+' min' : Math.floor(m/60)+'h '+String(m%60).padStart(2,'0')+'m'; }
 function haversine(la1, lo1, la2, lo2) {
   const R = 6371000, r = d => d*Math.PI/180;
@@ -1081,7 +1115,7 @@ function renderHome(app) {
         ${isAdmin ? `<button class="job-ball-btn" onclick="event.stopPropagation();openJobOptionsMenu('${id}','${safeName}')" aria-label="Job options"><img src="${BALL_ICON_DATA_URI}" alt=""></button>` : ''}
         <div class="name">${esc(j.name)}</div>
         <div class="meta">${isAdmin ? esc(j.brandName||'EARNT') + ' · ' : ''}${esc(j.cause||'')}</div>
-        <div class="meta">${esc(dateRangeText(j))}${vols ? ' · '+vols+' volunteer'+(vols>1?'s':'') : ''}</div>
+        <div class="meta">${esc(dateTimeText(j))}${vols ? ' · '+vols+' volunteer'+(vols>1?'s':'') : ''}</div>
         ${chipFor(j)}
         ${isAdmin ? jobTooltipHTML(j) : ''}
       </div>`;
@@ -1130,18 +1164,10 @@ function renderHome(app) {
         </div>`;
     }
   } else {
-    const lastJobId = (!isAdmin && !currentBrandId) ? localStorage.getItem('earnt_last_job_id') : null;
-    const lastJob = lastJobId ? jobs[lastJobId] : null;
     body += `<div style="margin:20px 0 14px"><div class="eyebrow">Actions speak louder than money</div><h1>Welcome</h1></div>
       <div class="card">
         <div style="font-size:.85rem;margin-bottom:4px"><b>EARNT On Site</b> is the tool a Brand uses to set up a job, a Cause uses to confirm it and print the check-in QR, and volunteers use to check in with GPS and a photo — proof EARNT can review before releasing an Earned Thank You.</div>
       </div>`;
-    if (lastJob) {
-      body += `<div class="card" style="text-align:center">
-        <div class="mono muted" style="font-size:.7rem;margin-bottom:10px">Checked in earlier?</div>
-        <button class="btn btn-hivis" onclick="go('job/${lastJobId}')">Return to ${esc(lastJob.name)}</button>
-      </div>`;
-    }
     body += `<div class="card" style="text-align:center">
       <div class="mono muted" style="font-size:.7rem;margin-bottom:10px">Brand sign-in</div>
       ${brandGateOpen ? `
@@ -1191,6 +1217,11 @@ function renderNew(app) {
       <input type="date" id="nDate" value="${new Date().toISOString().slice(0,10)}">
       <label>End date (only if this runs more than one day)</label>
       <input type="date" id="nEndDate">
+      <label>Start / finish time</label>
+      <div class="addr-row">
+        <input type="time" id="nStartTime" style="flex:1">
+        <input type="time" id="nEndTime" style="flex:1">
+      </div>
       <label>Notes for volunteers</label>
       <textarea id="nNotes" placeholder="What needs doing, what to bring…"></textarea>
       <label>Meeting point for the day</label>
@@ -1253,15 +1284,18 @@ function createJob() {
   const name = $('nJobName').value.trim(), cause = $('nCause').value.trim();
   if (!name) return toast('Give the job a name');
   if (!cause) return toast('Who is this job for?');
+  const dateVal = $('nDate').value;
+  const endDateVal = $('nEndDate').value || dateVal;
+  if (invalidDateRange(dateVal, endDateVal)) return toast('The end date can\u2019t be before the start date');
   const id = newId();
   const brandVal = $('nBrandSelect').value;
   const brandId = brandVal || null;
   const brandName = brandVal ? brands[brandVal].name : 'EARNT';
   const address = $('nAddress').value.trim(), directions = $('nDirections').value.trim();
-  const endDateVal = $('nEndDate').value || $('nDate').value;
   const base = {
     brandId, brandName, name, cause,
-    date: $('nDate').value, endDate: endDateVal, notes: $('nNotes').value.trim(), address, directions,
+    date: dateVal, endDate: endDateVal, startTime: $('nStartTime').value, endTime: $('nEndTime').value,
+    notes: $('nNotes').value.trim(), address, directions,
     createdAt: Date.now(), checkins: {}, photos: {}
   };
   if (hostChoice === 'self') {
@@ -1313,6 +1347,11 @@ function renderEditJob(app, id) {
       <input type="date" id="eDate" value="${esc(j.date||'')}">
       <label>End date (only if this runs more than one day)</label>
       <input type="date" id="eEndDate" value="${esc(j.endDate||j.date||'')}">
+      <label>Start / finish time</label>
+      <div class="addr-row">
+        <input type="time" id="eStartTime" value="${esc(j.startTime||'')}" style="flex:1">
+        <input type="time" id="eEndTime" value="${esc(j.endTime||'')}" style="flex:1">
+      </div>
       <label>Meeting point for the day</label>
       <div class="addr-row">
         <input type="text" id="eAddress" placeholder="Start typing an address…" value="${esc(j.address||'')}" style="flex:1">
@@ -1355,8 +1394,11 @@ function saveEditJob(id) {
   const j = jobs[id];
   const brandVal = $('eBrand').value;
   const eDate = $('eDate').value;
+  const eEndDate = $('eEndDate').value || eDate;
+  if (invalidDateRange(eDate, eEndDate)) return toast('The end date can\u2019t be before the start date');
   saveJob(id, {...j, name,
-    cause: $('eCause').value.trim(), date: eDate, endDate: $('eEndDate').value || eDate,
+    cause: $('eCause').value.trim(), date: eDate, endDate: eEndDate,
+    startTime: $('eStartTime').value, endTime: $('eEndTime').value,
     address: $('eAddress').value.trim(), directions: $('eDirections').value.trim(), notes: $('eNotes').value.trim(),
     lat: editPin ? editPin.lat : (j.lat ?? null), lng: editPin ? editPin.lng : (j.lng ?? null),
     brandId: brandVal || null, brandName: brandVal ? brands[brandVal].name : 'EARNT'});
@@ -1395,6 +1437,11 @@ function renderCause(app, id) {
       <input type="date" id="cDate" value="${esc(j.date||'')}">
       <label>End date (only if this runs more than one day)</label>
       <input type="date" id="cEndDate" value="${esc(j.endDate||j.date||'')}">
+      <label>Start / finish time</label>
+      <div class="addr-row">
+        <input type="time" id="cStartTime" value="${esc(j.startTime||'')}" style="flex:1">
+        <input type="time" id="cEndTime" value="${esc(j.endTime||'')}" style="flex:1">
+      </div>
       <label>Meeting point for the day *</label>
       <div class="addr-row">
         <input type="text" id="cAddress" placeholder="Start typing an address…" value="${esc(j.address||'')}" style="flex:1">
@@ -1455,7 +1502,10 @@ function confirmCause(id) {
   if (!causePin) return toast('Pin your exact location before confirming — tap "Pin current location" above');
   const j = jobs[id];
   const cDate = $('cDate').value;
-  saveJob(id, {...j, name, date: cDate, endDate: $('cEndDate').value || cDate, address, directions, notes: $('cNotes').value.trim(),
+  const cEndDate = $('cEndDate').value || cDate;
+  if (invalidDateRange(cDate, cEndDate)) return toast('The end date can\u2019t be before the start date');
+  saveJob(id, {...j, name, date: cDate, endDate: cEndDate, startTime: $('cStartTime').value, endTime: $('cEndTime').value,
+    address, directions, notes: $('cNotes').value.trim(),
     lat: causePin.lat, lng: causePin.lng,
     status:'confirmed', confirmedAt: Date.now()});
   causePin = null;
@@ -1491,7 +1541,7 @@ function renderQR(app, id) {
     <div class="qr-card" id="printCard">
       <div class="qr-eyebrow">EARNT<span>·</span>CHECK IN</div>
       <h1>${esc(j.name)}</h1>
-      <div class="qr-sub">${esc(j.brandName||'')}${j.brandName && j.cause ? ' × ' : ''}${esc(j.cause||'')}${j.date ? ' · '+esc(dateRangeText(j)) : ''}</div>
+      <div class="qr-sub">${esc(j.brandName||'')}${j.brandName && j.cause ? ' × ' : ''}${esc(j.cause||'')}${j.date ? ' · '+esc(dateTimeText(j)) : ''}</div>
       <div class="qr-box" id="qrcanvas"></div>
       <div class="qr-instruction">Scan to check in</div>
       <div class="qr-footer">${esc(j.address||'')}</div>
@@ -1659,7 +1709,6 @@ function exportJobCSV(id) {
 function renderJob(app, id) {
   const j = jobs[id];
   if (!j) { app.innerHTML = '<div class="card" style="margin-top:20px">Job not found.</div>'; return; }
-  if (!isAdmin && !currentBrandId) localStorage.setItem('earnt_last_job_id', id);
   const stage = jobStage(j);
   if (stage === 'awaiting_cause') {
     $('hdrSub').textContent = 'Not open yet';
@@ -1723,7 +1772,7 @@ function renderJob(app, id) {
       <div class="eyebrow">${esc(j.brandName||'')}${j.brandName && j.cause ? ' × ' : ''}${esc(j.cause||'')}</div>
       <h1>${esc(j.name)}</h1>
       <div class="mono muted" style="font-size:.68rem;margin-top:6px">
-        ${esc(dateRangeText(j))}${j.address ? ' · '+esc(j.address) : ''}
+        ${esc(dateTimeText(j))}${j.address ? ' · '+esc(j.address) : ''}
         ${j.lat ? ` · <a href="${mapsLink(j.lat,j.lng)}" target="_blank" style="color:inherit">Map ↗</a>` : ''}
       </div>
       ${viewMapHTML('jobViewMap', j.lat, j.lng)}
