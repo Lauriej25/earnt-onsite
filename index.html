@@ -4,8 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
 <title>EARNT · On Site</title>
+<script>
+// Applied before first paint so returning dark-mode users don't see a flash
+// of the light theme while the main script (loaded at the end of body) runs.
+try { document.documentElement.setAttribute('data-theme', localStorage.getItem('earnt_theme') === 'dark' ? 'dark' : 'light'); } catch (e) {}
+</script>
 <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAWdUlEQVR4nO17ebhdVXn3b621573POffehJB5IKTBBE1IAqQ+DAlCEghTC1SxEIW2qJ9I7FNt7afQqlBb0Opjq2ghYRAjAYVCRMDHR8MUMwgk8EVIyESSe5Ob6d4z7Hmt9X5/nHMymTvkJrS17fs86/5xz9p7v+9vvetd77QYjk2sMTQABIFzPpGYT0QXADSZMVYEQI05/xWIADAiqgBsPWPsRcbUM7Va8lLjd96YQ0c/eCwBOBqC+77zYYB/GsB5jDFG9DvP/5ckxhiozuzLgP5OGCZLGz8dlO3g3KOeFQCU67rDOccixvg8AGgIrhrz+XvK/YmTRn2lBWN18Yj0c1rjz+I47kBDxubkwwFoCn8253iKMT6MiNRhv/0+kgIAxpgg0ru0xlVxHK/BYSA0AeAAtOu65zCG5zjnrUQkARj/KWyffJKMMUNr3UWEeXEcr0ZD5oMq7XneEIDWMcaGoI7O7+uq90QKgCCiPQCbEkXRHqAuPAOgGaOHOOdDAEi8h8IzxsAYA+f8iNH8/3tIAoDknA9hjB5C3VbUvxgEwbWAfpwIJ13tm8IyBmhNkFJCSgmtNYgIBIA35hiGAcMQ4JyDCAfnnGSSjMEA+HW1Wu3HDADzfW8lY+xsItI4SavfXNU8zxHHCQCQEFyWSiUaNKhNBkGgLcsUHECaS1Wr1fj+/QeM7nKZKakMAMxxbFiWBSKC1rr3D/afFGOME9GaMIxmsiAIzifSv0Rd8BPWwabgtVoIrbUePLgtnTnzHDl79vl6xvRpfPTo0WLwoBbDcVzNBeccQC41pWnCDnSV5Y7t2/Wrr61Ty194ia1YsdLs7NxrM8Z4EPgAcLKAIACKMX4R8333Hsb45xpH3oBXnzEGIThqtRBKaXX2jGnxzTffqK+4/FJjxKiRFmAagISWGfI8h9YKTVk4BxjjsCwT3LBR34VK7u7Ymf/s2V/kixc/zF9ZsdLhnBlBEJyMraEaR+PXme97rwD4IOpGYUBODuccSilEUaynnTUl+uKX/kZfefmljmF5lpYRoiiC1gTLMuE4NsAtHLK/QH1BNKBzpGmKLMvAGIPnueCGD6gke+a5n6d3fvVutnLVGs/1XG4aBpRSPTPVOzVlXcF836sCCAb6JsMQCMMIlmWlf/d3f5t8duGnHcv27TSuIE0zOI4NywkAQMdhWe7c2ZFv2boNnXv2ZWkScwCwbVefcsoga9y4MRg9aqThBSUTAM/TGuI4hW2bsN0SpEyy7927KP7S7V+2q9WqUygEkHLAIABAjfm+N2BdMgwD5XIFkyZNDB/5wWI6a9rZfpaUWZ7nEELA8UqIwnL6y18uz5566mf065Wrje3bd4parWo0NPhwFUAQ+HLkyBFq5rkz5BVXXMbmXPIhMyi2OWlchlIKQgjYbgu99dYb0YIb/4J+8+rrQalUOCEQmO97GgMwfk3h5829uPro0oeNUqnFrVW6YBj1U9QwLXXv9+6vfPvb99qbN2+xiGAYhgHLMiGE+J0zv2npsyxDnksAUOPGjkk/+amb07/87GcKWkmDqH6MBsUS4jhJbvjTm7InnlxWKJWKTEo5EPnp8I14vMLT1VddXlm27MdWIfDcWqULpmnWz3YiMMb5oEFtYsuWrWYQBEZLSxGOY4NzDq01lFJHjKZ1t20bpVIRxWJBbN32rtXa2ia4MHjT8JmmiVqlDMvgzk+e+JGz4MaPVMvlCgkxIPvNjnsLCCFQqVQxd85F1WU/fcJi0HYSx/B8DxxMgjGRJAkjIrj+qXj63x+tXHPdja7j2CYajk9fxDlHtVqTDz30/WjBgluKcdgJAHBdFyDKCTDDMIRtOzBNO/vjaz+SPvnkTwvFYuG4DeNxWX3OOeI4xsSJE6JHH33YEJzZcRRRUCiiu7scXzLv6vD+RQ/VHK9NExHC6i5cefW1hX/82t/HtVqoeT9WSQiBarVGt9/+N+GCBTcHYXU3tNZw/TZa+tgTtQtmXxZ3dHRGQbEFaRqTVJn1yA8esKZPnxqGYYi6Z3Ec5Pse9WcEgU++75HrOumaVcurRDFVundqlXfTvr3b42nTptYAEOcsW3T/d8pEqa5VOiiq7SaiOL/2mqsqAKhYLPT4jWKxQIwxuuSSiypKVbM43EO1cocmSunHjz9ctiwzBUATJ04Id+zYGGpVoUr3Tk1Uo9+uX1MrlYqJ57kHee3P6DcAxWKBAOivfPn/lokyXS23UxLvoyQ5kM6efX4FALW2tpDveyQET59Z9liFKKFqeaeWeTd1tG+Mhg4dEjuOfUwGg8An13OppaUl2fTOuppW1YZwMS3/1bMV27ZSz3OptbVFA6AZM86qViu7kyzZ35iX6W9/65/KAFRvIA8IgEIhINM0adKkM8Kw2pmk8V6qVTqIKFG33faJMgDd0lI6ONdxbBo0qC3evOmNUMkKVbp2aqKMvvudb/TIYBPgu+66o0yU6Up3HbhdHe9EI0YMjyzLpGKxQJ7nUktLkQDQxxZcXyaKZVjdRUm0h7K0Kz3nnOlVIQQVCsHJA6DBnPrhI/eViVIqd+0gopiee/YnFcZYXiwe+bFSqUAAaO7cD1WkrORRuJvSeC9FtT3pmZPfF5qmcQSDQeCTZZk0btyYsLtrZ5wl+yms7iKiUF533R+VAVCpVDwWT/KxpQ+WiZKDPC17ammFMSaP5mnAANRX36DJk88Io1pnmsZ7KYn3UhTuSadMmVwzDOOYaJcaDP5oyeLKIQZT+t693yoDUKVS4WjA9D9+7ctHAPyzZ35cAZAfS2MKhYAsy6Lx48eF3V3tcZbspzjspDztys49d0atv1rQp8nknCHPJS248aPS9VusJElgO0X8aMlj6bp1613fd48ZoWkimKYh/uFr3+BxVM1s24bMQ1xzzRXW8OFD0yRJG0kQIMtytLW1ph+9/jpDyRiWZULmaX7nXfcwIbhxjGx2/WRwHWzevNW9f9GDmWkHlKUZDMszb/74jVoppTnv28XpHQAG5LlEUPCzq6+ab5BOYFkW8jTM7v3+Im4Ygmt97JO9zqCLN99c7zz77POp7RYRRxEGnzLcuvTSS2SaZo1skEAcJ7ho9oX5qDFj7TgK4XhFvPjCS8nKVWscz/Og1LFDYK0VTNNk99//oBHVujLHtaFkhPmXzxWDB7dlaZr3mWXqFQDOOJIkwVlTp+R/MOF0M44iOF6AVatXZ2vXvmm5rtNnfM4YEz9cshSAUqzudPL5l80DAAVQ0w3V8+fPJYCLOqBMP7JkKWmljd4E0JrgujY2bNhkL3/hpcxyCoijGCNGjrRmnnu2TNMEfWlB7wBwBq0J55/3QQ3hGPWgQ9BPf/q8llKajPWuQFpr2LaFl19eae7e1Z65ngstE0yfPtVoa2vNZS6htIYf+PLcc6cbpFO4roNy177sV7960bQssx8JEAYiEk8ve5YApuvzTeOCC87TRKAT0oBGxKanz5jKAM2EIQCVyldWrORC1B9tJjOPNYC6b79v337j9dffkMJ0kSYJhg8fJsaPH6uzPEee5xg1coQcO2aMyNIUpu3g/63/rWxv7zAdx+nXN0zTwKpVa0SWVqVpGgAUpk2bwjnnqqct2i8AlFJwXSc/ffx4BsphWxZ2d3bKt9/eaDLGGpFb3uuQMofW2liz5lUGcJJKwTAdY8Lpp0spFfI8x+njx2nX94w8zwGYeO21NyjPpaGU7PP9zeTJpk1bzB07OqTjOCCVYty4MaxQCLRSqlc70GMGmDEGKSWKxQIbPLhVKJnDME0cONClbNvKhw0bChzLPB/9AUOgXK5i//6uDFAeAAYIjBgxHEB9H48YOVICZqP2qGl3Z6dqbW1NWlr6F+szxliSJPm+vXvZ+NPHI0titLW2mG1tLbq9fRcsyzp+AIC6BhSLRVUIAqEJkEmCMWNGe2tfeyUHwKgfoTQDQCAyDaOQJSGvByuMDx16ikCjqttSKhoAGOcCWVJjn/+r2/zPLvyUZmCsP9EjA6C1tlzXMdI4AuMMrudr3y9IrdubxdLjA6D+EGAapjIMk6MR55umwS2raON4kpINBupM1CHxfV81AfA8lzVrFEQEz3NNxjwM5BtaazBiEJzDNI0+k6e9aAA1/tKhVSCqFzAsp/+MHXxWIU1iNNsKSNNB7TmSSYJl2wAzDs7tL6k8gW7kA4iOfu+xqUcAiOrHYJomIktTZhk+hGGgXC7LdetWJKyvM7BBjAFSSRp66qmYeMYf+JD1he/q7j5Yh6hWaxqABohzYWD9+reijvZdME2rf+lvBiglafLkSfbgQYMMIg2pJMvzrGEAe35HrzZACIHu7govl6uyWAwsLkzs7twbXzz3SsHA7F621qEPGAJZluOmm26sLl58n5vEMQdI7+7cI5sAHOjq0oCG1hqmFdCixT/Iv/nN7/iWZfbLCHLOIKXKfr3iF8mw4cODPE0Q1qoolyumEKLXndSLBhCEEAjDEJ179+ox40YjSxKMGD7MGjd2DHV07BLNslVvJISAlFVMnfJ+E2C8viKKduzYyRirZ5ne3bbdAHJVt5DEpk39AOecC8/zWF8pruZpNXhwUY0dM4qpPIVpmdizd5880NVl1pO0PfPYhyfIkWW58fZbGzRgIstytLS1iYkTJ+RpmgGoe3u9DaUUOOf59GlTAOQwDANJFMoNGzYJwzBgmia2bN3Gy11lZVkmQBk+8P4zuWVZebOI2tsgIiRJivHjx+VDTj3VSNMMYBY2vbNZx1Ei+tKA/uxjvmrVmsZJU3czL5p9IRER9VXNZowhSVKMHjNKfuADZxp5GsN2HGzdtk29++52w7IsmKaJjo5dxsZ3NkvTcpHEMSaeMcGcMGG8TJKkzxxf3V3XmHXheZoL16inxzmtWvMqERHvi8c+XGGCYQi89PKvRRpXpG2bIJ3i8vlzhO97eV/7UwiOPM8x55KL8kJpkBXHKRh38MqK1TIMI6NeCmfIstx48cVXNJiJLMtgu0Vz/mVzpZSqz2BGKQ3LMvOrrryMg3Jmmia0jOXy5S8Jzhk7IVdYaw3HcbBhw0Zz7do3MtsJEIU1nDFpsj171gVZFMXoLR+vlIZpmvnHFlzPQbIRP0j59FPPsHqJuu4Jcs7Z08t+xrVKpGkYIJ2zG274E+F5btYbyELUs9Tnnnt2On36dDuOqnBcD2+/vSFbu/ZN03WPnavoNwAAIOp2wFzy6E8ITFD9hcxYuPBTYIzJnoxg3YBGuPjiWcnMP5zpRGEVrufjnY0bshdefNlyXedgQcRzHaxe/aq9du0bqeMXEIVVTD5zinPllfOTMIxgGD2BzKCUVp9d+H+IG7aZ5xKM27T08Sd1FEVmz88dBwBKaziOjaVLf2Lu2b0jcT0fca2Miy+52Lni8kujarV2TC3QWsMwjPzv7/gCAzFDKQUuHHrgwSWyUqla9ajtEFhJkpiLFj2kGDM1EYG0FF/64ucM3/cyKX83oGnUDzBr1vnRVVdd6SRRGa7rotK9N33kB48KyzJZT4mU4wKAiGDbNjo799jf/7cHcsP0SSoFrZRxzz1fFaVSMZFSHsGgaRqo1UK69da/iM+ZeZ4X1srwPB+7d72bLFr8sOU49hHMqYYW/HDJY/bmTW8lnh8grFUw+cyp7l9/fmEShhEdvpqMMSilYNt29o2v/wMXgpt5lsO0i3jgoR9mW7Zuc1zH6Z8T1d+iiOs6NGhQW/zutvWhkmWqdu/URCktXvTdMgDZTHKWSgViDDR92tRqWNuTpMk+qpbbiShTC2/7VBk9FEcaSVRasOCjFaJU1iodlER7Kcu60lmzzqsCoJaWYuMbRQKgvvnPXysTpbpabtd51kV792yJRo0YHtn2sWsPJ6MwQh/+k2sqzVx8WN1NRIn83OduKwPQbW0tZBiCRgwfGm7e9GazckNEEf16xS+qtm2lvTFWKAQkhMh//vyTFaKkXnmSZWpv3xiddtrYkHNObW2tBED/+Z9/rEwUyai2u1GjyOQtt9zUSKGf5MLIIRACAiAffODeMlFOle6dlER7iKiWf/ITN5cBqKFDT41ef+2VGlFE1XK7ztIDVKt2xmeeOanHFPrRqe7TThsb7tv3biTz7kbVJ6QNb78ejhs3JgSgPvKRa8syL6dpvK9ZFaInn1hS5pzl/S2IDAiAIPCpXnsLkjWrX6g1VonSZB8RVfK77ry96zerl4dEKdUq7Q1w4vz666/tsy54tKbNv2xuhVQ1TeN9VC23a6KE1r+5Krrj9i905emBLM8OHNSuDW+9Whs0qC12HOe46oK+79Fxl8c550iSFMOGnRq9sPx5GjtunF8rH4BpWbDdAqAzRFEELgQct0XffvsXq3feeU+hWCzw/pauG1kkuvXTt1T/5V+/7adJVSgp4boumHCQJVWkaYpCqRXt7R3R7NnzsHXru57nucddHh9Qi0wzSBo7dkz48+efxmnjJ/i1yn4wxhueG4Pr++qO279S/uqdd7f4vscNIeoN+wcTI4fi9foBcmSiU2uNWi2kz9x6S/e3vvX1YpbGgoigiUBKIyi1YeeO7dG8eVfRb9/a4BcKwYCappoXCY6LlFLwfR/btm33L7hwDl+x4uVqUBxCQnAQUb2alCZszpwPWTfddEMY+H5crlRVpVJFGEaNNrlDx6DWhDzPEUURKpUqKpWqth07ueGGD1evvvpKI89T1gSGM4agdArWvv567cJZc/HW2wMXHsDxb4HDqeHAQAiR3X33XfGtt37SA7QZVqvgnMP1iwCE2tW+LXvhxZfzX/7qRbZu3XrW3t5hVCoVppQiAiC4YKVSgYYNGybff+YkmjXrfJo9+wJj1OixNgARh2VoreEHAcBM+cADD0YLF37ejuPEHojaH04n3CbX7PkJw0hdOu+S6Ot338UmvX+KB0p5rVpt5Pg8CNMDAC3zWHZ3dVFXdzlP04wAwLYttJSKVktrKzMt1wAY1zJGGEZgDAiCAOCufmfj+vgLf3uHfuKJZZ7nuUIIcaKdo7WT0ijZbIiuVKrwfS/9+MdvSD9z6yfExDPe5wBcqCxEnCTQuh5dmqYJwzDAmpGeJuRSQsocTbfXcWwYlg+AqS2b30m+e+998r77HrArlapTLBZOtFv08EbJk9MqC9S3hFIKYRghCPz00kvnZB+9/jr64AdnmkNOHWICpgCIATmg1WFGkAFcoJ6g4gQotX/fnnzlyjX5kh89jmeeec4ulyu257kwTqxDtEmHWmVPdrN0Pc0lIKVCFEUAIIcNG5pPn35WfvbZZ+F9E8+gUaOHm6VSq7IsgwMMMpe6XOkW27d3yA0bN+A3v3kdr7261ti+Y6cFwPA8F6ZpQKmT1j5/qFka71G7fBMIAMjSDEmaNn/Spmkoy7K0EIKBAUoqyrKc53neXARm2xZs2wLATva9gSPa5Q0AxBi/B9CPYwBHYk9EhIOqapgGirYFxuqlBa01b3Z9AvUtYNsWXNdpzmnkE0/aHYEjWAOI1WUGMTRuUPm++zxjfM5/5GWpQ9fa/sPuI0rGmEGkfx6G8VwA4n8vTaFxkzKKot1EuIKIuhhjAvXLU/9dSNatPnUR4YooinY3/q+b574GIOI4Xk2EuUR6F2Os3mlw2C3L30NSqBs9g0jvIsLcxp1BgcbC86MmiziO12iNGUT6OcaYaGhD8/f3xCqdZNI47MZo47x/TmvMOPrWKPC/l6d7dHz+x1yf//+SlXxnW5yyzAAAAABJRU5ErkJggg==">
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
@@ -33,14 +39,6 @@
     --pending:#B8760A; --pending-light:#FFF3D6;
     --surface:#FFFFFF; --surface-dark:#0B0B0A;
   }
-  @media (prefers-color-scheme: dark){
-    :root:not([data-theme="light"]):not([data-theme="dark"]){
-      --ink:#F2F1EA; --paper:#0D1512; --card:#16211B; --card-alt:#1C2822; --line:#2A3830; --muted:#9DAAA1;
-      --go:#3EDC8B; --go-light:#123321; --stop:#FF7A69; --stop-light:#3A1D18;
-      --pending:#FFC169; --pending-light:#3A2C10;
-      --surface:#16211B; --surface-dark:#115a32;
-    }
-  }
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
   html{font-size:16px;scroll-padding-top:90px}
   body{font-family:'Archivo',system-ui,sans-serif;background:var(--paper);color:var(--ink);min-height:100vh;transition:background .2s ease,color .2s ease}
@@ -56,12 +54,16 @@
   .brand-logo{height:34px;width:auto;display:block;margin:0 auto 10px;transition:height .15s ease}
   .wordmark span{color:var(--hivis)}
   .hdr-sub{font-family:'IBM Plex Mono';font-size:.58rem;letter-spacing:.1em;color:#bdbcb4;text-transform:uppercase;transition:font-size .15s ease}
-  .hdr-side{display:flex;flex-direction:column;gap:2px;min-width:0;align-items:flex-end}
-  .hdr-role-area{display:flex;flex-direction:column;gap:2px;align-items:flex-end}
-  .theme-toggle{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;
-    border-radius:99px;width:26px;height:26px;font-size:.8rem;line-height:1;cursor:pointer;
-    display:flex;align-items:center;justify-content:center;margin-bottom:3px;flex-shrink:0}
-  .theme-toggle:active{background:rgba(255,255,255,.22)}
+  .hdr-side{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0}
+  .hdr-role-area{display:flex;align-items:center;gap:8px;min-width:0}
+  .theme-toggle{position:relative;display:flex;align-items:center;width:60px;height:30px;padding:3px;
+    border:1px solid rgba(255,255,255,.3);border-radius:99px;background:rgba(255,255,255,.12);
+    color:#fff;cursor:pointer;margin-bottom:3px;flex-shrink:0;overflow:hidden;transition:background .2s ease}
+  .theme-toggle::before{content:'';position:absolute;inset:3px auto 3px 3px;width:25px;border-radius:99px;
+    background:var(--hivis);box-shadow:0 2px 5px rgba(0,0,0,.25);transition:transform .22s cubic-bezier(.2,.8,.2,1)}
+  .theme-toggle.is-dark::before{transform:translateX(28px)}
+  .theme-toggle:active::before{box-shadow:0 1px 3px rgba(0,0,0,.35)}
+  .theme-toggle-label{position:relative;z-index:1;width:50%;font-size:.9rem;text-align:center;line-height:1}
   .role-pill{font-family:'IBM Plex Mono';font-size:.58rem;background:var(--hivis);color:#0B0B0A;
     padding:4px 9px;border-radius:99px;font-weight:600;letter-spacing:.05em;white-space:nowrap;align-self:end}
   .back-btn{background:rgba(255,255,255,.14);border:none;color:#fff;font-size:1.35rem;line-height:1;cursor:pointer;
@@ -160,6 +162,8 @@
   .btn-ghost{background:transparent;border:1.5px solid var(--ink)}
   .btn-sm{font-family:'Archivo';font-weight:600;font-size:.78rem;padding:10px 14px;width:auto;border-radius:10px}
   .btn-row{display:flex;gap:10px}
+  .social-actions{display:flex;gap:8px;margin:8px 0}
+  .social-actions .btn{flex:1;min-width:0}
   .link-btn{background:none;border:none;font-family:'IBM Plex Mono';font-size:.68rem;
     text-decoration:underline;color:var(--muted);cursor:pointer;padding:6px 0}
   label{display:block;font-family:'IBM Plex Mono';font-size:.6rem;letter-spacing:.12em;
@@ -271,7 +275,9 @@
     <div class="hdr-sub" id="hdrSub">Volunteer check-in</div>
   </div>
   <div id="hdrRight" class="hdr-side">
-    <button id="themeToggleBtn" class="theme-toggle no-print" onclick="cycleTheme()"></button>
+    <button id="themeToggleBtn" class="theme-toggle no-print" onclick="toggleTheme()" type="button" aria-pressed="false">
+      <span class="theme-toggle-label" aria-hidden="true">&#9728;</span><span class="theme-toggle-label" aria-hidden="true">&#9790;</span>
+    </button>
     <div id="hdrRoleArea" class="hdr-role-area"></div>
   </div>
 </header>
@@ -416,9 +422,13 @@ let brands = {};
 let isAdmin = false, adminGateOpen = false;
 let currentBrandId = null, brandGateOpen = false;
 let volunteerName = null;
+let volunteerFirstName = null;
+let volunteerLastName = null;
 let volunteerPhone = null;
 let volunteerEmail = null;
 let volunteerInstagram = null;
+let volunteerEmergencyName = null;
+let volunteerEmergencyPhone = null;
 let currentPhase = 'before';
 let activeJobId = null;
 let captureIntent = 'gallery'; // 'gallery' | 'checkin' | 'checkout'
@@ -493,6 +503,15 @@ function deleteBrand(id) { if (DEMO) { delete brands[id]; render(); } else db.re
 function deletePhoto(jobId, photoId) {
   if (DEMO) { delete jobs[jobId].photos[photoId]; render(); }
   else db.ref('jobs/' + jobId + '/photos/' + photoId).remove();
+}
+function deleteVolunteerPhoto(jobId, photoId) {
+  const photo = jobs[jobId] && jobs[jobId].photos && jobs[jobId].photos[photoId];
+  const mine = photo && ((photo.deviceId && photo.deviceId === getDeviceId()) || (!photo.deviceId && photo.by === volunteerName));
+  if (!mine) return toast('That photo belongs to someone else');
+  requestDelete('photo', jobId + '::' + photoId, 'your photo', () => deletePhoto(jobId, photoId), {
+    confirmMsg: 'Delete this photo? It will vanish in 15 seconds unless you undo it.',
+    undoText: 'Photo deleted'
+  });
 }
 function deleteCheckin(jobId, key) {
   const c = jobs[jobId] && jobs[jobId].checkins && jobs[jobId].checkins[key];
@@ -839,6 +858,16 @@ function getDeviceId() {
 }
 function restoreVolunteerName() {
   const n = localStorage.getItem('earnt_volunteer_name');
+  const storedFirst = localStorage.getItem('earnt_volunteer_first_name');
+  const storedLast = localStorage.getItem('earnt_volunteer_last_name');
+  if (storedFirst || storedLast) {
+    volunteerFirstName = storedFirst || '';
+    volunteerLastName = storedLast || '';
+  } else if (n) {
+    const parts = n.trim().split(/\s+/);
+    volunteerFirstName = parts.shift() || '';
+    volunteerLastName = parts.join(' ');
+  }
   if (n) volunteerName = n;
   const p = localStorage.getItem('earnt_volunteer_phone');
   if (p) volunteerPhone = p;
@@ -846,10 +875,18 @@ function restoreVolunteerName() {
   if (e) volunteerEmail = e;
   const ig = localStorage.getItem('earnt_volunteer_instagram');
   if (ig) volunteerInstagram = ig;
+  volunteerEmergencyName = localStorage.getItem('earnt_volunteer_emergency_name') || null;
+  volunteerEmergencyPhone = localStorage.getItem('earnt_volunteer_emergency_phone') || null;
 }
-function setVolunteerName(name) {
+function setVolunteerName(firstName, lastName) {
+  firstName = firstName.trim(); lastName = lastName.trim();
+  const name = [firstName, lastName].filter(Boolean).join(' ');
   volunteerName = name;
+  volunteerFirstName = firstName;
+  volunteerLastName = lastName;
   localStorage.setItem('earnt_volunteer_name', name);
+  localStorage.setItem('earnt_volunteer_first_name', firstName);
+  localStorage.setItem('earnt_volunteer_last_name', lastName);
 }
 function setVolunteerPhone(phone) {
   volunteerPhone = phone;
@@ -865,14 +902,30 @@ function setVolunteerInstagram(handle) {
   if (handle) localStorage.setItem('earnt_volunteer_instagram', handle);
   else localStorage.removeItem('earnt_volunteer_instagram');
 }
-let volunteerNameBackup = null, volunteerPhoneBackup = null, volunteerEmailBackup = null, volunteerInstagramBackup = null;
+function setVolunteerEmergency(name, phone) {
+  volunteerEmergencyName = (name || '').trim();
+  volunteerEmergencyPhone = (phone || '').trim();
+  if (volunteerEmergencyName) localStorage.setItem('earnt_volunteer_emergency_name', volunteerEmergencyName);
+  else localStorage.removeItem('earnt_volunteer_emergency_name');
+  if (volunteerEmergencyPhone) localStorage.setItem('earnt_volunteer_emergency_phone', volunteerEmergencyPhone);
+  else localStorage.removeItem('earnt_volunteer_emergency_phone');
+}
+function openInstagram() { window.open('https://www.instagram.com/', '_blank', 'noopener'); }
+function followEarnt() { window.open('https://www.instagram.com/earnt_/', '_blank', 'noopener'); }
+let volunteerNameBackup = null, volunteerFirstNameBackup = null, volunteerLastNameBackup = null;
+let volunteerPhoneBackup = null, volunteerEmailBackup = null, volunteerInstagramBackup = null;
+let volunteerEmergencyNameBackup = null, volunteerEmergencyPhoneBackup = null;
 function beginChangeIdentity() {
-  volunteerNameBackup = volunteerName; volunteerPhoneBackup = volunteerPhone; volunteerEmailBackup = volunteerEmail; volunteerInstagramBackup = volunteerInstagram;
-  volunteerName = null; volunteerPhone = null; volunteerEmail = null; // display only — localStorage untouched, so a reload or re-scan still remembers them
+  volunteerNameBackup = volunteerName; volunteerFirstNameBackup = volunteerFirstName; volunteerLastNameBackup = volunteerLastName;
+  volunteerPhoneBackup = volunteerPhone; volunteerEmailBackup = volunteerEmail; volunteerInstagramBackup = volunteerInstagram;
+  volunteerEmergencyNameBackup = volunteerEmergencyName; volunteerEmergencyPhoneBackup = volunteerEmergencyPhone;
+  volunteerName = null; volunteerFirstName = null; volunteerLastName = null; volunteerPhone = null; volunteerEmail = null; // display only — localStorage untouched, so a reload or re-scan still remembers them
   render();
 }
 function cancelChangeIdentity() {
-  volunteerName = volunteerNameBackup; volunteerPhone = volunteerPhoneBackup; volunteerEmail = volunteerEmailBackup; volunteerInstagram = volunteerInstagramBackup;
+  volunteerName = volunteerNameBackup; volunteerFirstName = volunteerFirstNameBackup; volunteerLastName = volunteerLastNameBackup;
+  volunteerPhone = volunteerPhoneBackup; volunteerEmail = volunteerEmailBackup; volunteerInstagram = volunteerInstagramBackup;
+  volunteerEmergencyName = volunteerEmergencyNameBackup; volunteerEmergencyPhone = volunteerEmergencyPhoneBackup;
   render();
 }
 function isValidPhone(s) { return (s||'').replace(/[^\d]/g,'').length >= 7; }
@@ -1024,7 +1077,7 @@ $('photoInput').addEventListener('change', async e => {
     try {
       const data = await compress(files[0]);
       const photoId = pushPath(jobId + '/photos', {phase:'proof-in', data, at:Date.now(), by:name, lat:gps.lat, lng:gps.lng, deviceId:myDeviceId});
-      pushPath(jobId + '/checkins', {name, phone, email, instagram, deviceId:myDeviceId, inAt:Date.now(), inLat:gps.lat, inLng:gps.lng, inAcc:gps.acc, inPhotoId:photoId, outAt:null, verified:false, rewardReleased:false});
+      pushPath(jobId + '/checkins', {name, phone, email, instagram, emergencyName:pendingCheckin.emergencyName, emergencyPhone:pendingCheckin.emergencyPhone, deviceId:myDeviceId, inAt:Date.now(), inLat:gps.lat, inLng:gps.lng, inAcc:gps.acc, inPhotoId:photoId, outAt:null, verified:false, rewardReleased:false});
       const jName = (jobs[jobId] && jobs[jobId].name) || 'this project';
       const jCause = (jobs[jobId] && jobs[jobId].cause) || jName;
       lastCheckinPhotoData = data; lastCheckinJobName = jName; lastCheckinCauseName = jCause;
@@ -1100,6 +1153,7 @@ window.addEventListener('hashchange', render);
 
 function render() {
   const h = location.hash.slice(1) || '';
+  const routeChanged = currentRoute === null || h !== currentRoute;
   if (currentRoute !== null && h !== currentRoute) {
     if (!isGoingBack) navHistory.push(currentRoute);
   }
@@ -1107,7 +1161,11 @@ function render() {
   currentRoute = h;
   $('backBtn').style.visibility = navHistory.length ? 'visible' : 'hidden';
 
-  const app = $('app'); window.scrollTo(0,0);
+  // Only jump to the top of the page on an actual navigation. Re-renders
+  // triggered by live data (Firebase updates, the 60s live-job poll, an
+  // admin toggling Verified/ETY on a long roster) must not yank the
+  // scroll position back to the top mid-interaction.
+  const app = $('app'); if (routeChanged) window.scrollTo(0,0);
   updateHeaderRole();
   if (h.startsWith('report/')) renderReport(app, h.split('/')[1]);
   else if (h.startsWith('cause/'))  renderCause(app, h.split('/')[1]);
@@ -1694,7 +1752,7 @@ function rosterSection(j, id, opts) {
     return `<div class="roster-row">
       <div class="rr-top">
         <div><div class="rr-name">${esc(redact ? firstNameOf(c.name) : c.name)}</div>
-          <div class="rr-time">${!redact && c.phone ? esc(c.phone) + ' · ' : ''}${!redact && c.email ? esc(c.email) + ' · ' : ''}${!redact && c.instagram ? '@'+esc(c.instagram) + ' · ' : ''}In ${fmtTime(c.inAt)}${c.outAt ? ' → Out '+fmtTime(c.outAt)+' ('+fmtDur(c.outAt-c.inAt)+')' : ' · <span class="gps-ok">on site</span>'}</div>
+          <div class="rr-time">${!redact && c.phone ? esc(c.phone) + ' · ' : ''}${!redact && c.email ? esc(c.email) + ' · ' : ''}${!redact && c.instagram ? '@'+esc(c.instagram) + ' · ' : ''}${!redact && c.emergencyName ? 'Emergency: '+esc(c.emergencyName)+(c.emergencyPhone?' · '+esc(c.emergencyPhone)+' · ':' · ') : ''}In ${fmtTime(c.inAt)}${c.outAt ? ' → Out '+fmtTime(c.outAt)+' ('+fmtDur(c.outAt-c.inAt)+')' : ' · <span class="gps-ok">on site</span>'}</div>
           ${!redact && c.inLat!=null ? `<div class="rr-time">In: ${distanceMapTrigger(j, c.inLat, c.inLng, esc(c.name)+' — Check-in')}</div>` : ''}
           ${!redact && c.outLat!=null ? `<div class="rr-time">Out: ${distanceMapTrigger(j, c.outLat, c.outLng, esc(c.name)+' — Check-out')}</div>` : ''}
         </div>
@@ -1733,10 +1791,10 @@ function csvCell(v) {
 }
 function exportJobCSV(id) {
   const j = jobs[id];
-  const header = ['Name','Phone','Email','Instagram','Check-in Time','Check-in GPS','Check-out Time','Check-out GPS','Duration',
+  const header = ['Name','Phone','Email','Instagram','Emergency Contact','Emergency Number','Check-in Time','Check-in GPS','Check-out Time','Check-out GPS','Duration',
     'Verified','Verified At','ETY Released','Released At'];
   const rows = Object.values(j.checkins||{}).sort((a,b) => a.inAt-b.inAt).map(c => [
-    c.name, c.phone||'', c.email||'', c.instagram ? '@'+c.instagram : '',
+    c.name, c.phone||'', c.email||'', c.instagram ? '@'+c.instagram : '', c.emergencyName||'', c.emergencyPhone||'',
     new Date(c.inAt).toLocaleString('en-GB'), c.inLat!=null ? c.inLat+', '+c.inLng : '',
     c.outAt ? new Date(c.outAt).toLocaleString('en-GB') : '', c.outLat!=null ? c.outLat+', '+c.outLng : '',
     c.outAt ? fmtDur(c.outAt-c.inAt) : '',
@@ -1803,7 +1861,7 @@ function renderJob(app, id) {
       <button class="add-photo" onclick="capturePhotos('${id}','${p}')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Add
       </button>
-      ${list.map(ph => `<img src="${ph.data}" loading="lazy" alt="${p} photo" onclick="openLightbox(this.src,'${p.toUpperCase()} · ${fmtTime(ph.at)} · ${esc(ph.by)}')">`).join('')}
+      ${list.map(ph => `<div class="photo-wrap"><img src="${ph.data}" loading="lazy" alt="${p} photo" onclick="openLightbox(this.src,'${p.toUpperCase()} · ${fmtTime(ph.at)} · ${esc(ph.by)}')"><button class="photo-del" aria-label="Delete photo" onclick="event.stopPropagation();deleteVolunteerPhoto('${id}','${ph.id}')">✕</button></div>`).join('')}
     </div>`;
   };
 
@@ -1831,18 +1889,30 @@ function renderJob(app, id) {
     <div class="docket">
       <div class="docket-band ${activity==='live'?'live':''}"><span class="band-label">${bandLabel}</span></div>
       <div class="docket-body">
-        ${!volunteerName || !volunteerPhone || !volunteerEmail ? `<label style="margin-top:0">Your name</label>
-          <input type="text" id="volName" placeholder="First name + surname" autocomplete="name" value="${esc(volunteerName||'')}">
+        ${!volunteerFirstName || !volunteerLastName || !volunteerPhone || !volunteerEmail ? `<div class="btn-row" style="gap:8px">
+          <div style="flex:1"><label style="margin-top:0">First name</label>
+          <input type="text" id="volFirstName" autocomplete="given-name" value="${esc(volunteerFirstName||'')}"></div>
+          <div style="flex:1"><label style="margin-top:0">Last name</label>
+          <input type="text" id="volLastName" autocomplete="family-name" value="${esc(volunteerLastName||'')}"></div>
+          </div>
           <label>Phone number</label>
-          <input type="text" id="volPhone" placeholder="So we can call if we need to check in" autocomplete="tel" value="${esc(volunteerPhone||'')}">
+          <input type="text" id="volPhone" autocomplete="tel" value="${esc(volunteerPhone||'')}">
           <label>Email</label>
-          <input type="email" id="volEmail" placeholder="For an extra check before your ETY is released" autocomplete="email" value="${esc(volunteerEmail||'')}">
+          <input type="email" id="volEmail" autocomplete="email" value="${esc(volunteerEmail||'')}">
           <label>Instagram <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
-          <input type="text" id="volInstagram" placeholder="@yourhandle — so EARNT can tag you" value="${esc(volunteerInstagram||'')}">
-          <div class="mono muted" style="font-size:.6rem;margin-top:4px">Kept on file with your check-in — helps us confirm everyone's real details.</div>
+          <div class="social-actions">
+            <button class="btn btn-sm btn-ghost" type="button" onclick="openInstagram()">Open Instagram</button>
+            <button class="btn btn-sm btn-ink" type="button" onclick="followEarnt()">Follow @earnt_</button>
+          </div>
+          <input type="text" id="volInstagram" autocomplete="off" value="${esc(volunteerInstagram||'')}">
+          <label>Emergency contact <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
+          <div class="btn-row" style="gap:8px">
+            <div style="flex:1"><label style="margin-top:0">Name</label><input type="text" id="volEmergencyName" autocomplete="off" value="${esc(volunteerEmergencyName||'')}"></div>
+            <div style="flex:1"><label style="margin-top:0">Contact number</label><input type="text" id="volEmergencyPhone" autocomplete="tel" value="${esc(volunteerEmergencyPhone||'')}"></div>
+          </div>
           ${volunteerNameBackup ? `<button class="link-btn" onclick="cancelChangeIdentity()" style="padding:6px 0 0">Cancel — keep my details as they were</button>` : ''}
           <div style="height:10px"></div>` : `
-          <div class="mono muted" style="font-size:.66rem;margin-bottom:10px">Signed in as <b style="color:var(--ink)">${esc(volunteerName)}</b> · ${esc(volunteerPhone)} · ${esc(volunteerEmail)}${volunteerInstagram?' · @'+esc(volunteerInstagram):''}
+          <div class="mono muted" style="font-size:.66rem;margin-bottom:10px">Signed in as <b style="color:var(--ink)">${esc(volunteerName)}</b> · ${esc(volunteerPhone)} · ${esc(volunteerEmail)}${volunteerInstagram?' · @'+esc(volunteerInstagram):''}${volunteerEmergencyName?' · emergency: '+esc(volunteerEmergencyName):''}
             <button class="link-btn" onclick="beginChangeIdentity()" style="padding:0 0 0 8px">change</button></div>`}
         <div class="stamp-row">
           <div class="stamp ${me&&me.inAt?'filled':''}"><div class="s-label">Check in</div><div class="s-time">${me&&me.inAt?fmtTime(me.inAt):'--:--'}</div>
@@ -1865,39 +1935,71 @@ function renderJob(app, id) {
     ${!outsideDates ? `<div class="card">
       <h2>Photo Evidence</h2>
       <div class="mono muted" style="font-size:.62rem;margin-bottom:10px">You'll only see your own photos here — the full team's story goes straight to ${esc(j.cause||'the Cause')} and EARNT.</div>
-      <div class="phase-tabs">${['before','during','after'].map(p => `<button class="phase-tab ${currentPhase===p?'active':''}" onclick="switchPhase('${p}')">${p}${phasePhotos(p).length?' ('+phasePhotos(p).length+')':''}</button>`).join('')}</div>
+      <div class="phase-tabs">${['before','during','after'].map(p => `<button class="phase-tab ${currentPhase===p?'active':''}" data-phase="${p}" onclick="switchPhase('${p}')">${p}${phasePhotos(p).length?' ('+phasePhotos(p).length+')':''}</button>`).join('')}</div>
       ${['before','during','after'].map(phaseBlock).join('')}
     </div>` : `<div class="card muted" style="text-align:center;font-size:.8rem">Photo evidence opens up on ${esc(j.date)}${j.endDate && j.endDate!==j.date ? '–'+esc(j.endDate) : ''}.</div>`}`;
   initViewMap('jobViewMap', j.lat, j.lng);
 }
-function switchPhase(p) { currentPhase = p; render(); }
+// Every phase's photo grid is already in the DOM (just hidden) — flip visibility
+// in place instead of a full render(), so switching tabs doesn't reset scroll,
+// re-init the map, or refetch/rebuild the whole job page for a pure view toggle.
+function switchPhase(p) {
+  currentPhase = p;
+  document.querySelectorAll('.phase-tab').forEach(t => t.classList.toggle('active', t.dataset.phase === p));
+  document.querySelectorAll('.photo-grid[data-phase]').forEach(g => g.style.display = g.dataset.phase === p ? '' : 'none');
+}
 
 async function beginCheckIn(jobId) {
   const j = jobs[jobId];
   if (j && j.date && (todayStr() < j.date || todayStr() > (j.endDate || j.date))) {
     return toast('This job isn\u2019t scheduled for today — check-in isn\u2019t open');
   }
-  if (!volunteerName || !volunteerPhone || !volunteerEmail) {
-    const v = $('volName') ? $('volName').value.trim() : '';
+  if (!volunteerFirstName || !volunteerLastName || !volunteerPhone || !volunteerEmail) {
+    const firstName = $('volFirstName') ? $('volFirstName').value.trim() : '';
+    const lastName = $('volLastName') ? $('volLastName').value.trim() : '';
     const p = $('volPhone') ? $('volPhone').value.trim() : '';
     const em = $('volEmail') ? $('volEmail').value.trim() : '';
     const ig = $('volInstagram') ? $('volInstagram').value.trim() : '';
-    if (!v) return toast('Enter your name first');
+    const emergencyName = $('volEmergencyName') ? $('volEmergencyName').value.trim() : '';
+    const emergencyPhone = $('volEmergencyPhone') ? $('volEmergencyPhone').value.trim() : '';
+    if (!firstName) return toast('Enter your first name');
+    if (!lastName) return toast('Enter your last name');
     if (!p) return toast('Enter a phone number too — we may need to call and check in');
     if (!isValidPhone(p)) return toast('That doesn\u2019t look like a valid phone number');
     if (!em) return toast('Enter your email too — it\u2019s a double-check before your ETY is released');
     if (!isValidEmail(em)) return toast('That doesn\u2019t look like a valid email address');
-    setVolunteerName(v); setVolunteerPhone(p); setVolunteerEmail(em); setVolunteerInstagram(ig);
-    volunteerNameBackup = null; volunteerPhoneBackup = null; volunteerEmailBackup = null; volunteerInstagramBackup = null;
+    setVolunteerName(firstName, lastName); setVolunteerPhone(p); setVolunteerEmail(em); setVolunteerInstagram(ig); setVolunteerEmergency(emergencyName, emergencyPhone);
+    volunteerNameBackup = null; volunteerFirstNameBackup = null; volunteerLastNameBackup = null; volunteerPhoneBackup = null; volunteerEmailBackup = null; volunteerInstagramBackup = null; volunteerEmergencyNameBackup = null; volunteerEmergencyPhoneBackup = null;
   }
   const btn = $('ciBtn'); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Getting location…';
   try {
     const gps = await getGPS();
-    pendingCheckin = {jobId, name: volunteerName, phone: volunteerPhone, email: volunteerEmail, instagram: volunteerInstagram, gps};
-    captureIntent = 'checkin';
-    toast('Take a selfie or a photo of the meeting point to confirm you\u2019re on site', 4000);
-    $('photoInput').value = ''; $('photoInput').click();
+    pendingCheckin = {jobId, name: volunteerName, phone: volunteerPhone, email: volunteerEmail, instagram: volunteerInstagram, emergencyName: volunteerEmergencyName, emergencyPhone: volunteerEmergencyPhone, gps};
+    const distance = j && j.lat != null && j.lng != null ? Math.round(haversine(j.lat, j.lng, gps.lat, gps.lng)) : null;
+    if (distance != null && distance > 150) {
+      showModal('Nearly there...', `<div style="text-align:center;padding:6px 0">
+        <div style="font-size:2rem">🧭</div>
+        <div style="font-weight:700;font-size:1.05rem;margin:10px 0 6px">You're ${distance}m away.</div>
+        <div style="font-size:.85rem;color:var(--muted)">The meeting point is playing hide-and-seek. Please get within 150m, or continue if your GPS is having a wobble.</div>
+        <button class="btn btn-hivis" style="margin-top:18px" onclick="closeModal();continueCheckInPhoto()">Continue anyway</button>
+        <button class="btn btn-ghost" style="margin-top:10px" onclick="cancelCheckInPhoto()">Go back</button>
+      </div>`);
+      return;
+    }
+    continueCheckInPhoto();
   } catch (e) { btn.disabled = false; btn.textContent = 'Check In'; toast(e.message, 4000); }
+}
+function continueCheckInPhoto() {
+  if (!pendingCheckin) return;
+  captureIntent = 'checkin';
+  toast('Take a selfie or a photo of the meeting point to confirm you\u2019re on site', 4000);
+  $('photoInput').value = ''; $('photoInput').click();
+}
+function cancelCheckInPhoto() {
+  pendingCheckin = null;
+  closeModal();
+  const btn = $('ciBtn');
+  if (btn) { btn.disabled = false; btn.textContent = 'Check In'; }
 }
 async function beginCheckOut(jobId, key) {
   const btn = $('coBtn'); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Getting location…';
@@ -2020,27 +2122,28 @@ document.addEventListener('focusin', e => {
   }
 });
 
-/* ---------- theme: auto (system) / light / dark, with #115a32 as dark mode's signature surface ---------- */
-function getStoredTheme() { return localStorage.getItem('earnt_theme') || 'auto'; }
+/* ---------- theme: light / dark, with #115a32 as dark mode's signature surface ---------- */
+function getStoredTheme() {
+  const stored = localStorage.getItem('earnt_theme');
+  return stored === 'dark' ? 'dark' : 'light';
+}
 function applyTheme(theme) {
-  if (theme === 'auto') document.documentElement.removeAttribute('data-theme');
-  else document.documentElement.setAttribute('data-theme', theme);
-  localStorage.setItem('earnt_theme', theme);
-  updateThemeToggleIcon();
+  const nextTheme = theme === 'dark' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', nextTheme);
+  localStorage.setItem('earnt_theme', nextTheme);
+  updateThemeToggle();
 }
-function cycleTheme() {
-  const order = ['auto', 'light', 'dark'];
-  applyTheme(order[(order.indexOf(getStoredTheme()) + 1) % order.length]);
+function toggleTheme() {
+  applyTheme(getStoredTheme() === 'dark' ? 'light' : 'dark');
 }
-function updateThemeToggleIcon() {
+function updateThemeToggle() {
   const el = $('themeToggleBtn');
   if (!el) return;
   const theme = getStoredTheme();
-  const icons = {auto: '\u25D1', light: '\u2600', dark: '\u263D'};
-  const labels = {auto: 'Auto', light: 'Light', dark: 'Dark'};
-  el.textContent = icons[theme];
-  el.title = 'Theme: ' + labels[theme] + ' — tap to change';
-  el.setAttribute('aria-label', 'Theme: ' + labels[theme] + ', tap to change');
+  el.classList.toggle('is-dark', theme === 'dark');
+  el.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
+  el.title = 'Switch to ' + (theme === 'dark' ? 'day' : 'night') + ' mode';
+  el.setAttribute('aria-label', 'Switch to ' + (theme === 'dark' ? 'day' : 'night') + ' mode');
 }
 applyTheme(getStoredTheme());
 
