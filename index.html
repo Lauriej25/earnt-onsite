@@ -44,8 +44,8 @@ try { document.documentElement.setAttribute('data-theme', localStorage.getItem('
   body{font-family:'Archivo',system-ui,sans-serif;background:var(--paper);color:var(--ink);min-height:100vh;transition:background .2s ease,color .2s ease}
   .wrap{max-width:520px;margin:0 auto;padding:0 16px 96px}
   header{position:sticky;top:0;z-index:20;background:var(--surface-dark);color:#fff;padding:10px 14px;
-    display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;transition:padding .15s ease}
-  .hdr-title{text-align:center;cursor:pointer;user-select:none;min-width:0}
+    display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;transition:padding .15s ease}
+  .hdr-title{text-align:center;cursor:pointer;user-select:none;min-width:0;overflow:hidden}
   .wordmark{font-family:'Archivo Black';font-size:1.05rem;letter-spacing:.06em;white-space:nowrap}
   .header-logo{height:22px;width:auto;display:inline-block;vertical-align:middle;transition:height .15s ease}
   .logo-row{display:flex;align-items:center;justify-content:center;gap:7px}
@@ -65,7 +65,8 @@ try { document.documentElement.setAttribute('data-theme', localStorage.getItem('
   .theme-toggle:active::before{box-shadow:0 1px 3px rgba(0,0,0,.35)}
   .theme-toggle-label{position:relative;z-index:1;width:50%;font-size:.9rem;text-align:center;line-height:1}
   .role-pill{font-family:'IBM Plex Mono';font-size:.58rem;background:var(--hivis);color:#0B0B0A;
-    padding:4px 9px;border-radius:99px;font-weight:600;letter-spacing:.05em;white-space:nowrap;align-self:end}
+    padding:4px 9px;border-radius:99px;font-weight:600;letter-spacing:.05em;white-space:nowrap;align-self:end;
+    max-width:110px;overflow:hidden;text-overflow:ellipsis}
   .back-btn{background:rgba(255,255,255,.14);border:none;color:#fff;font-size:1.35rem;line-height:1;cursor:pointer;
     width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;
     justify-self:start;flex-shrink:0;transition:width .15s ease,height .15s ease}
@@ -85,6 +86,15 @@ try { document.documentElement.setAttribute('data-theme', localStorage.getItem('
     .header-signout{font-size:.7rem}
     .back-btn{width:44px;height:44px;font-size:1.6rem}
     .brand-logo{height:46px}
+  }
+  @media (max-width: 520px) {
+    header{padding-left:10px;padding-right:10px;gap:5px}
+    .hdr-side,.hdr-role-area{gap:4px}
+    .theme-toggle{width:52px}
+    .theme-toggle::before{width:21px}
+    .theme-toggle.is-dark::before{transform:translateX(24px)}
+    .role-pill{max-width:72px;padding-left:6px;padding-right:6px}
+    .header-signout{font-size:.56rem}
   }
   .legend-box{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;
     margin-bottom:12px;font-size:.74rem;line-height:1.5}
@@ -2149,7 +2159,7 @@ applyTheme(getStoredTheme());
 
 document.getElementById('headerLogoImg').src = LOGO_DATA_URI;
 
-/* Some in-app browsers (Messenger, Instagram, etc.) don't reliably resize the
+/* Some in-app browsers (Messenger, Instagram, etc.) don't reliably resise the
    page or scroll a focused field above the on-screen keyboard, so a field near
    the bottom of a card can end up hidden underneath it. Where supported, watch
    the real visible viewport and pad the page enough that any focused field
