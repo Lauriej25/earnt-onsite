@@ -423,6 +423,12 @@ function initViewMap(divId, lat, lng) {
    paste the printed hash over the matching *_HASH constant below. */
 const ADMIN_HASH = '50848f637d55a1ce659682513fa030a19ae9d5f1d85bf0aa76424bc5581f480d';
 
+/* Public half of the RSA keypair events.earnt.co.uk signs pre-registration
+   links with (RS256 JWT). Paste the real JWK here once the portal side
+   generates its keypair — leave null to disable link verification (every
+   "Invite-only" job just falls back to the manual override, no code error). */
+const PORTAL_TOKEN_PUBLIC_KEY = null; /* e.g. {kty:'RSA', n:'...', e:'AQAB', alg:'RS256', ext:true} */
+
 const DEMO = !FIREBASE_CONFIG;
 let dataLoaded = DEMO;
 let db = null;
@@ -448,6 +454,7 @@ let pendingPin = null;
 function confirmPinNew() { if (!pendingPin) return toast('Place a pin on the map first'); toast('✓ Pin confirmed at ' + pendingPin.lat + ', ' + pendingPin.lng); }
 let newJobMapInstance = null;
 let hostChoice = 'cause'; // 'cause' | 'self' — used on the New Job form
+let preRegChoice = false; // true = invite-only (pre-registered volunteers only) — New Job form
 
 /* ---------- data layer ---------- */
 if (!DEMO) {
@@ -920,6 +927,66 @@ function setVolunteerEmergency(name, phone) {
   if (volunteerEmergencyPhone) localStorage.setItem('earnt_volunteer_emergency_phone', volunteerEmergencyPhone);
   else localStorage.removeItem('earnt_volunteer_emergency_phone');
 }
+/* ---------- pre-registration link (events.earnt.co.uk) ----------
+   A volunteer who registered on the portal can be sent a personal link —
+   https://onsite.earnt.co.uk/?vt=<token>#job/<jobId> — signed with the
+   portal's private key. Verified entirely client-side against the public
+   key above; there's no live call back to the portal. A valid token just
+   pre-fills the same identity fields a volunteer would otherwise type, so
+   the existing "Signed in as X" UI takes over with no further changes. */
+let preRegisteredForJobId = null;
+let portalVolunteerId = null;
+function base64UrlToBytes(b64url) {
+  const b64 = b64url.replace(/-/g,'+').replace(/_/g,'/') + '==='.slice((b64url.length + 3) % 4);
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+let portalKeyPromise = null;
+function importPortalPublicKey() {
+  if (!PORTAL_TOKEN_PUBLIC_KEY) return Promise.reject(new Error('no portal key configured'));
+  portalKeyPromise = portalKeyPromise || crypto.subtle.importKey(
+    'jwk', PORTAL_TOKEN_PUBLIC_KEY, {name:'RSASSA-PKCS1-v1_5', hash:'SHA-256'}, false, ['verify']);
+  return portalKeyPromise;
+}
+async function verifyPortalToken(token) {
+  const parts = token.split('.');
+  if (parts.length !== 3) throw new Error('malformed token');
+  const [b64header, b64payload, b64sig] = parts;
+  const payload = JSON.parse(new TextDecoder().decode(base64UrlToBytes(b64payload)));
+  const key = await importPortalPublicKey();
+  // The verification algorithm is fixed here regardless of what the token's
+  // own header claims — never let a token pick its own algorithm.
+  const data = new TextEncoder().encode(b64header + '.' + b64payload);
+  const ok = await crypto.subtle.verify({name:'RSASSA-PKCS1-v1_5'}, key, base64UrlToBytes(b64sig), data);
+  if (!ok) throw new Error('bad signature');
+  if (payload.exp && Date.now() > payload.exp) throw new Error('expired');
+  if (!payload.jobId) throw new Error('missing jobId');
+  return payload;
+}
+async function consumePreRegToken() {
+  const params = new URLSearchParams(location.search);
+  const token = params.get('vt');
+  if (!token) return;
+  // Scrub the token from the visible URL immediately — it carries personal
+  // details and shouldn't linger in the address bar or get re-shared.
+  history.replaceState(null, '', location.pathname + location.hash);
+  try {
+    const payload = await verifyPortalToken(token);
+    preRegisteredForJobId = payload.jobId;
+    portalVolunteerId = payload.pvid || null;
+    setVolunteerName(payload.firstName || '', payload.lastName || '');
+    if (payload.phone) setVolunteerPhone(payload.phone);
+    if (payload.email) setVolunteerEmail(payload.email);
+    if (payload.instagram) setVolunteerInstagram(payload.instagram);
+    if (payload.emergencyName) setVolunteerEmergency(payload.emergencyName, payload.emergencyPhone || '');
+  } catch (e) {
+    console.warn('Pre-registration link not accepted:', e.message);
+    // Fail open, silently — renderJob() falls back to the invite-only
+    // message (for a gated job) or the ordinary open form (otherwise).
+  }
+}
 function openInstagram() { window.open('https://www.instagram.com/', '_blank', 'noopener'); }
 function followEarnt() { window.open('https://www.instagram.com/earnt_/', '_blank', 'noopener'); }
 let volunteerNameBackup = null, volunteerFirstNameBackup = null, volunteerLastNameBackup = null;
@@ -1087,7 +1154,9 @@ $('photoInput').addEventListener('change', async e => {
     try {
       const data = await compress(files[0]);
       const photoId = pushPath(jobId + '/photos', {phase:'proof-in', data, at:Date.now(), by:name, lat:gps.lat, lng:gps.lng, deviceId:myDeviceId});
-      pushPath(jobId + '/checkins', {name, phone, email, instagram, emergencyName:pendingCheckin.emergencyName, emergencyPhone:pendingCheckin.emergencyPhone, deviceId:myDeviceId, inAt:Date.now(), inLat:gps.lat, inLng:gps.lng, inAcc:gps.acc, inPhotoId:photoId, outAt:null, verified:false, rewardReleased:false});
+      const overrideBy = pendingCheckin.manualOverrideBy || null;
+      pushPath(jobId + '/checkins', {name, phone, email, instagram, emergencyName:pendingCheckin.emergencyName, emergencyPhone:pendingCheckin.emergencyPhone, deviceId:myDeviceId, inAt:Date.now(), inLat:gps.lat, inLng:gps.lng, inAcc:gps.acc, inPhotoId:photoId, outAt:null, verified:false, rewardReleased:false, portalVolunteerId: overrideBy ? null : (portalVolunteerId || null), overrideBy});
+      if (overrideBy) pushPath(jobId + '/activityLog', {action:'manual_override_checkin', by: overrideBy + ' — checked in ' + name + ' manually', at: Date.now()});
       const jName = (jobs[jobId] && jobs[jobId].name) || 'this project';
       const jCause = (jobs[jobId] && jobs[jobId].cause) || jName;
       lastCheckinPhotoData = data; lastCheckinJobName = jName; lastCheckinCauseName = jCause;
@@ -1314,6 +1383,7 @@ function renderNew(app) {
   if (!isAdmin) { toast('Only EARNT sets up jobs'); go(''); return; }
   $('hdrSub').textContent = 'New job';
   hostChoice = 'cause';
+  preRegChoice = false;
   pendingPin = null;
   newJobMapInstance = null;
   app.innerHTML = `
@@ -1372,6 +1442,15 @@ function renderNew(app) {
         <input type="email" id="nCauseContactEmailConfirm" placeholder="Re-enter to confirm">
       </div>
       <div id="selfFields" class="hidden"></div>
+      <label>Who can check in?</label>
+      <div class="radio-row">
+        <div class="radio-opt sel" id="regOpen" onclick="setPreReg(false)">
+          <div class="ro-t">Anyone with the QR</div><div class="ro-s">Open check-in, same as today</div>
+        </div>
+        <div class="radio-opt" id="regInvite" onclick="setPreReg(true)">
+          <div class="ro-t">Invite-only</div><div class="ro-s">Only pre-registered volunteers</div>
+        </div>
+      </div>
     </div>
     <button class="btn btn-hivis" onclick="createJob()">Create Job</button>
     <button class="link-btn" onclick="go('')" style="display:block;margin:12px auto">Cancel</button>`;
@@ -1391,6 +1470,11 @@ function setHost(choice) {
   $('hostCause').classList.toggle('sel', choice==='cause');
   $('hostSelf').classList.toggle('sel', choice==='self');
   $('causeFields').classList.toggle('hidden', choice!=='cause');
+}
+function setPreReg(v) {
+  preRegChoice = v;
+  $('regOpen').classList.toggle('sel', !v);
+  $('regInvite').classList.toggle('sel', v);
 }
 async function pinHere() {
   $('nPin').innerHTML = '<span class="spinner"></span> Getting GPS fix…';
@@ -1413,6 +1497,7 @@ function createJob() {
     brandId, brandName, name, cause,
     date: dateVal, endDate: endDateVal, startTime: $('nStartTime').value, endTime: $('nEndTime').value,
     notes: $('nNotes').value.trim(), address, directions,
+    requiresPreRegistration: preRegChoice,
     createdAt: Date.now(), checkins: {}, photos: {}
   };
   if (hostChoice === 'self') {
@@ -1436,7 +1521,7 @@ function createJob() {
 
 /* ---------- CAUSE confirmation ---------- */
 /* ---------- EDIT JOB (admin only) ---------- */
-let editPin = null, editMapInstance = null;
+let editPin = null, editMapInstance = null, editPreRegChoice = false, editExistingCheckinCount = 0;
 function confirmPinEdit() { if (!editPin) return toast('Place a pin on the map first'); toast('✓ Pin confirmed at ' + editPin.lat + ', ' + editPin.lng); }
 function renderEditJob(app, id) {
   if (!isAdmin) { toast('Only EARNT admin can edit a job directly'); go(''); return; }
@@ -1445,6 +1530,8 @@ function renderEditJob(app, id) {
   $('hdrSub').textContent = 'Edit job';
   editPin = j.lat != null ? {lat:j.lat, lng:j.lng} : null;
   editMapInstance = null;
+  editPreRegChoice = !!j.requiresPreRegistration;
+  editExistingCheckinCount = Object.keys(j.checkins||{}).length;
   app.innerHTML = `
     <div style="margin:20px 0 6px"><h1>Edit Job</h1></div>
     <div class="card">
@@ -1482,6 +1569,16 @@ function renderEditJob(app, id) {
       ${pinMapHTML('ePinMap', 'confirmPinEdit')}
       <label>Notes for volunteers</label>
       <textarea id="eNotes">${esc(j.notes||'')}</textarea>
+      <label>Who can check in?</label>
+      <div class="radio-row">
+        <div class="radio-opt ${editPreRegChoice?'':'sel'}" id="eRegOpen" onclick="setEditPreReg(false)">
+          <div class="ro-t">Anyone with the QR</div><div class="ro-s">Open check-in, same as today</div>
+        </div>
+        <div class="radio-opt ${editPreRegChoice?'sel':''}" id="eRegInvite" onclick="setEditPreReg(true)">
+          <div class="ro-t">Invite-only</div><div class="ro-s">Only pre-registered volunteers</div>
+        </div>
+      </div>
+      <div class="mono muted" id="ePreRegNote" style="font-size:.6rem;margin-top:6px" ${editPreRegChoice && editExistingCheckinCount ? '' : 'hidden'}>This job already has ${editExistingCheckinCount} check-in${editExistingCheckinCount>1?'s':''} — they're unaffected, invite-only only applies to new check-ins from here on.</div>
     </div>
     <button class="btn btn-hivis" onclick="saveEditJob('${id}')">Save Changes</button>
     <button class="link-btn" onclick="go('qr/${id}')" style="display:block;margin:12px auto">View Job →</button>
@@ -1496,6 +1593,12 @@ function renderEditJob(app, id) {
     editPin = pos;
     $('ePin').innerHTML = `<span class="gps-ok">✓ Pinned</span> ${pos.lat}, ${pos.lng} · <a href="${mapsLink(pos.lat,pos.lng)}" target="_blank" style="color:inherit">View on map ↗</a>`;
   });
+}
+function setEditPreReg(v) {
+  editPreRegChoice = v;
+  $('eRegOpen').classList.toggle('sel', !v);
+  $('eRegInvite').classList.toggle('sel', v);
+  $('ePreRegNote').hidden = !(v && editExistingCheckinCount);
 }
 async function pinEdit() {
   $('ePin').innerHTML = '<span class="spinner"></span> Getting GPS fix…';
@@ -1518,7 +1621,8 @@ function saveEditJob(id) {
     startTime: $('eStartTime').value, endTime: $('eEndTime').value,
     address: $('eAddress').value.trim(), directions: $('eDirections').value.trim(), notes: $('eNotes').value.trim(),
     lat: editPin ? editPin.lat : (j.lat ?? null), lng: editPin ? editPin.lng : (j.lng ?? null),
-    brandId: brandVal || null, brandName: brandVal ? brands[brandVal].name : 'EARNT'});
+    brandId: brandVal || null, brandName: brandVal ? brands[brandVal].name : 'EARNT',
+    requiresPreRegistration: editPreRegChoice});
   toast('Job updated');
   go('qr/' + id);
 }
@@ -1679,6 +1783,8 @@ function renderQR(app, id) {
       : `<div style="height:10px" class="no-print"></div><button class="btn btn-ghost no-print" onclick="reopenJob('${id}')">Reopen Job</button>`}
     ${isAdmin || (currentBrandId && j.brandId===currentBrandId) ? `<div style="height:10px" class="no-print"></div>
     <button class="btn btn-ghost no-print" onclick="go('report/${id}')">View Client Report</button>` : ''}
+    ${j.requiresPreRegistration && jobStage(j)!=='completed' && (isAdmin || (currentBrandId && j.brandId===currentBrandId)) ? `<div style="height:10px" class="no-print"></div>
+    <button class="btn btn-ghost no-print" onclick="openManualCheckinModal('${id}')">Check In a Volunteer Manually</button>` : ''}
     ${isAdmin ? `<div style="height:10px" class="no-print"></div>
     <button class="btn btn-ghost no-print" onclick="go('edit/${id}')">Edit Job</button>` : ''}
     <div class="no-print">${gallerySection()}</div>
@@ -1694,6 +1800,38 @@ function whoAmI(j) {
   if (isAdmin) return 'EARNT';
   if (currentBrandId && brands[currentBrandId]) return brands[currentBrandId].name;
   return (j && j.causeContactName) || 'The Brand';
+}
+/* ---------- manual override check-in (invite-only jobs) ----------
+   For whoever's running an invite-only job on the day, to check in someone
+   without a valid link — a walk-in, a lost email, a portal hiccup. Reuses
+   the exact same GPS+photo check-in pipeline as self check-in; the only
+   difference is who typed the details and that it's logged as an override. */
+function openManualCheckinModal(jobId) {
+  showModal('Check In a Volunteer', `
+    <div class="mono muted" style="font-size:.62rem;margin-bottom:8px">For someone without a valid invite link.</div>
+    <label style="margin-top:0">First name</label><input type="text" id="ovFirst">
+    <label>Last name</label><input type="text" id="ovLast">
+    <label>Phone <span style="text-transform:none;letter-spacing:0">(optional)</span></label><input type="text" id="ovPhone">
+    <label>Email <span style="text-transform:none;letter-spacing:0">(optional)</span></label><input type="email" id="ovEmail">
+    <div class="mono muted" style="font-size:.62rem;margin:10px 0">You'll still need to confirm their location and take a proof photo, same as any check-in.</div>
+    <button class="btn btn-hivis" onclick="confirmManualCheckin('${jobId}')">Continue</button>
+    <button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Cancel</button>
+  `);
+}
+async function confirmManualCheckin(jobId) {
+  const firstName = $('ovFirst').value.trim(), lastName = $('ovLast').value.trim();
+  const phone = $('ovPhone').value.trim(), email = $('ovEmail').value.trim();
+  if (!firstName || !lastName) return toast('Enter a name');
+  if (phone && !isValidPhone(phone)) return toast('That doesn’t look like a valid phone number');
+  if (email && !isValidEmail(email)) return toast('That doesn’t look like a valid email address');
+  const operator = whoAmI(jobs[jobId]);
+  closeModal();
+  try {
+    const gps = await getGPS();
+    pendingCheckin = {jobId, name: [firstName, lastName].filter(Boolean).join(' '), phone, email,
+      instagram:'', emergencyName:'', emergencyPhone:'', gps, manualOverrideBy: operator};
+    continueCheckInPhoto();
+  } catch (e) { toast(e.message, 4000); }
 }
 function markComplete(id) {
   const j = jobs[id];
@@ -1723,8 +1861,8 @@ function reopenJob(id) {
 function activityLogSection(j, id) {
   const cleared = hiddenIds.has('log:' + id);
   const entries = cleared ? [] : Object.values(j.activityLog||{}).sort((a,b) => b.at - a.at);
-  const icons = {completed:'✅', reopened:'🔄', checkin_reopened:'🔓'};
-  const labels = {completed:'Completed by', reopened:'Reopened by', checkin_reopened:''};
+  const icons = {completed:'✅', reopened:'🔄', checkin_reopened:'🔓', manual_override_checkin:'🔓'};
+  const labels = {completed:'Completed by', reopened:'Reopened by', checkin_reopened:'', manual_override_checkin:''};
   const safeLabel = 'Activity log';
   return `<div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center">
@@ -1769,6 +1907,8 @@ function rosterSection(j, id, opts) {
         <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
           ${c.verified ? '<span class="badge badge-verified">✓ Verified</span>' : '<span class="badge badge-unverified">Unverified</span>'}
           ${c.rewardReleased ? '<span class="badge badge-released">ETY released</span>' : ''}
+          ${!redact && c.portalVolunteerId ? '<span class="badge badge-unverified">Pre-registered</span>' : ''}
+          ${!redact && c.overrideBy ? `<span class="badge badge-unverified">Checked in by ${esc(c.overrideBy)}</span>` : ''}
         </div>
       </div>
       ${(inP && inP.data) || (outP && outP.data) ? `<div class="roster-photos">
@@ -1802,14 +1942,15 @@ function csvCell(v) {
 function exportJobCSV(id) {
   const j = jobs[id];
   const header = ['Name','Phone','Email','Instagram','Emergency Contact','Emergency Number','Check-in Time','Check-in GPS','Check-out Time','Check-out GPS','Duration',
-    'Verified','Verified At','ETY Released','Released At'];
+    'Verified','Verified At','ETY Released','Released At','Pre-registered','Portal Volunteer ID','Manually Checked In By'];
   const rows = Object.values(j.checkins||{}).sort((a,b) => a.inAt-b.inAt).map(c => [
     c.name, c.phone||'', c.email||'', c.instagram ? '@'+c.instagram : '', c.emergencyName||'', c.emergencyPhone||'',
     new Date(c.inAt).toLocaleString('en-GB'), c.inLat!=null ? c.inLat+', '+c.inLng : '',
     c.outAt ? new Date(c.outAt).toLocaleString('en-GB') : '', c.outLat!=null ? c.outLat+', '+c.outLng : '',
     c.outAt ? fmtDur(c.outAt-c.inAt) : '',
     c.verified ? 'Yes' : 'No', c.verifiedAt ? new Date(c.verifiedAt).toLocaleString('en-GB') : '',
-    c.rewardReleased ? 'Yes' : 'No', c.rewardReleasedAt ? new Date(c.rewardReleasedAt).toLocaleString('en-GB') : ''
+    c.rewardReleased ? 'Yes' : 'No', c.rewardReleasedAt ? new Date(c.rewardReleasedAt).toLocaleString('en-GB') : '',
+    c.portalVolunteerId ? 'Yes' : 'No', c.portalVolunteerId||'', c.overrideBy||''
   ]);
   const csv = [header, ...rows].map(r => r.map(csvCell).join(',')).join('\r\n');
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
@@ -1857,6 +1998,20 @@ function renderJob(app, id) {
   if (me) {
     if (!volunteerName) volunteerName = me.name; // recognised purely by device — keep the UI in sync
     if (!volunteerPhone && me.phone) volunteerPhone = me.phone;
+  }
+  // Invite-only jobs skip the open self-entry form for anyone without a
+  // validly-verified link for THIS job — but never for someone who already
+  // has a check-in on this device (e.g. returning later to check out), and
+  // never for EARNT admin or the Brand running this job, who have the
+  // manual override on the QR/roster page instead.
+  const isOverrideViewer = isAdmin || (currentBrandId && j.brandId === currentBrandId);
+  const hasValidInvite = preRegisteredForJobId === id;
+  if (j.requiresPreRegistration && !hasValidInvite && !isOverrideViewer && !me && !closedMe) {
+    $('hdrSub').textContent = 'Invite only';
+    app.innerHTML = `<div style="margin:20px 0 6px"><h1>${esc(j.name)}</h1></div>
+      <div class="pending-card"><div class="p-icon">🔒</div><div style="font-weight:700;margin-top:6px">This job is invite-only</div>
+      <div class="mono muted" style="font-size:.7rem;margin-top:6px">Check-in is limited to volunteers who registered ahead of time. If you're expecting to help with ${esc(j.cause||'this job')}, check the link EARNT sent you, or ask whoever's running today's event to check you in.</div></div>`;
+    return;
   }
   const activity = jobActivity(j);
   const photos = Object.entries(j.photos||{}).map(([k,v]) => ({id:k, ...v}));
@@ -2178,7 +2333,7 @@ document.addEventListener('focusin', e => {
 
 restoreSession();
 restoreVolunteerName();
-render();
+consumePreRegToken().finally(render);
 setInterval(() => {
   const h = location.hash.slice(1);
   if (h.startsWith('job/') || h.startsWith('qr/')) {
