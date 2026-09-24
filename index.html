@@ -222,6 +222,18 @@ try { document.documentElement.setAttribute('data-theme', localStorage.getItem('
   .feed-post:first-child{border-top:0;padding-top:0}
   .feed-post-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
   .feed-author{font-weight:700;font-size:.78rem}
+  .switch-row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:10px;padding:8px 10px;border:1px dashed var(--line);border-radius:8px;font-family:'IBM Plex Mono';font-size:.6rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);cursor:pointer}
+  .switch{appearance:none;-webkit-appearance:none;position:relative;flex:0 0 38px;width:38px;height:22px;margin:0;border-radius:99px;background:var(--line);cursor:pointer;transition:background .15s}
+  .switch::before{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);transition:transform .15s}
+  .switch:checked{background:var(--go)}
+  .switch:checked::before{transform:translateX(16px)}
+  .switch:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  .poster-link{background:none;border:none;padding:0;font:inherit;color:inherit;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px}
+  .photo-by{font-family:'IBM Plex Mono';font-size:.58rem;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pd-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:.84rem}
+  .pd-k{font-family:'IBM Plex Mono';font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+  .pd-v{font-weight:700;text-align:right;word-break:break-word}
+  .pd-v a{color:inherit}
   .feed-meta{font-family:'IBM Plex Mono';font-size:.56rem;color:var(--muted)}
   .feed-message{font-size:.86rem;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
   .feed-image{display:block;width:100%;max-height:360px;object-fit:cover;border-radius:10px;border:1px solid var(--line);cursor:pointer;margin-top:8px}
@@ -714,6 +726,39 @@ function showModal(title, bodyHTML) {
   $('modalBody').innerHTML = bodyHTML;
   $('modalOverlay').classList.add('open');
 }
+/* ---------- admin: who posted this? ----------
+   Feed posts and photos store the poster's deviceId (and name). Match that against
+   the job's check-ins and QR visitor records to pull together their contact details. */
+function posterDetails(jobId, deviceId, name) {
+  const j = jobs[jobId] || {};
+  const same = r => r && ((deviceId && r.deviceId === deviceId) || (!deviceId && name && r.name === name));
+  const checkins = Object.values(j.checkins || {}).filter(same).sort((a,b) => (a.inAt || 0) - (b.inAt || 0));
+  const visitors = Object.values(j.scanVisitors || {}).filter(same);
+  const pick = f => [...checkins].reverse().concat(visitors).map(r => r[f]).find(v => v) || null;
+  const byMe = r => same({deviceId:r.deviceId, name:r.by || r.author});
+  return {
+    name: pick('name') || name || 'Unknown', phone: pick('phone'), email: pick('email'),
+    registered: visitors.some(v => v.registered), checkins,
+    posts: Object.values(j.feedPosts || {}).filter(p => p.role !== 'operator' && byMe(p)).length,
+    photos: Object.values(j.photos || {}).filter(byMe).length
+  };
+}
+function posterLink(jobId, deviceId, name, label) {
+  if (!isAdmin) return esc(label != null ? label : name);
+  return `<button class="poster-link" onclick="event.stopPropagation();showPosterDetails('${jobId}','${esc(deviceId || '')}','${esc(String(name || '').replace(/'/g, "\\'"))}')">${esc(label != null ? label : name)}</button>`;
+}
+function showPosterDetails(jobId, deviceId, name) {
+  const d = posterDetails(jobId, deviceId, name);
+  const row = (k, v) => `<div class="pd-row"><span class="pd-k">${k}</span><span class="pd-v">${v}</span></div>`;
+  const shifts = d.checkins.length ? d.checkins.map(c => `<div class="rr-time">In ${fmtTime(c.inAt)}${c.outAt ? ' · Out ' + fmtTime(c.outAt) : ' · still on site'}${c.verified ? ' · Verified' : ''}</div>`).join('') : '<div class="rr-time">Not checked in</div>';
+  showModal(d.name, `
+    ${row('Phone', d.phone ? `<a href="tel:${esc(d.phone)}">${esc(d.phone)}</a>` : '—')}
+    ${row('Email', d.email ? `<a href="mailto:${esc(d.email)}">${esc(d.email)}</a>` : '—')}
+    ${row('Status', d.registered ? 'Registered' : 'Not registered')}
+    ${row('Activity', `${d.posts} post${d.posts === 1 ? '' : 's'} · ${d.photos} photo${d.photos === 1 ? '' : 's'}`)}
+    <div class="mono muted" style="font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;margin:12px 0 4px">Check-ins</div>${shifts}
+    ${!d.phone && !d.email ? '<div class="muted" style="font-size:.74rem;margin-top:12px">No contact details yet — they haven\'t checked in or entered their details on this device.</div>' : ''}`);
+}
 /* Best-effort share of the just-taken check-in photo via the device's own
    share sheet — Instagram will appear there as one of the apps someone can
    pick, same as any other installed app, if they have it installed. There's
@@ -883,9 +928,11 @@ function jobActivity(job) {
 function checkinUrl(id) { return location.origin + location.pathname + '#job/' + id; }
 function causeUrl(id) { return location.origin + location.pathname + '#cause/' + id; }
 function mapsLink(lat, lng) { return 'https://www.google.com/maps/search/?api=1&query=' + lat + ',' + lng; }
-function photoThumb(jobId, ph, label) {
+function photoThumb(jobId, ph, label, showBy) {
   const del = isAdmin ? `<button class="photo-del" onclick="event.stopPropagation();requestDelete('photo','${jobId}::${ph.id}','photo',()=>deletePhoto('${jobId}','${ph.id}'))">✕</button>` : '';
-  return `<div class="photo-wrap"><img src="${ph.data}" loading="lazy" onclick="openLightbox(this.src,'${label}')">${del}</div>`;
+  const by = showBy && isAdmin ? `<div class="photo-by">${posterLink(jobId, ph.deviceId, ph.by || 'Volunteer')}</div>` : '';
+  const thumb = `<div class="photo-wrap"><img src="${ph.data}" loading="lazy" onclick="openLightbox(this.src,'${label}')">${del}</div>`;
+  return by ? `<div>${thumb}${by}</div>` : thumb;
 }
 function copyLink(url) { navigator.clipboard.writeText(url).then(() => toast('Link copied')).catch(() => toast(url, 5000)); }
 function gpsLine(job, lat, lng) {
@@ -1884,7 +1931,7 @@ function renderQR(app, id) {
     return `<div class="card no-print"><h2>Photo Evidence</h2>${phases.map(([p,title]) => {
       const list = storyPhotos(p); if (!list.length) return '';
       return `<div class="mono muted" style="font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;margin:10px 0 6px">${title} (${list.length})</div>
-        <div class="photo-grid">${list.map(ph => photoThumb(id, ph, title.toUpperCase()+' · '+fmtTime(ph.at)+' · '+esc(ph.by))).join('')}</div>`;
+        <div class="photo-grid">${list.map(ph => photoThumb(id, ph, title.toUpperCase()+' · '+fmtTime(ph.at)+' · '+esc(ph.by), true)).join('')}</div>`;
     }).join('')}</div>`;
   };
 
@@ -2138,9 +2185,11 @@ function renderFeed(j, id, opts = {}) {
   feedPostingRole = isOperator ? 'operator' : 'volunteer';
   feedOperatorView = isOperator;
   const canPost = feedCanPost(j, isVolunteer, isOperator);
+  const phasesOn = !!j.feedPhasesEnabled; // Before/During/After tabs — per-job admin switch, off by default
+  const activePhase = phasesOn ? feedPhase : 'all';
   const posts = Object.entries(j.feedPosts || {})
     .map(([key, post]) => ({id:key, ...post}))
-    .filter(post => feedPhase === 'all' || post.phase === feedPhase)
+    .filter(post => activePhase === 'all' || post.phase === activePhase)
     .sort((a,b) => (a.at || 0) - (b.at || 0));
   const allPosts = Object.values(j.feedPosts || {});
   const reports = Object.values(j.feedReports || {}).filter(report => report.status === 'open');
@@ -2149,8 +2198,8 @@ function renderFeed(j, id, opts = {}) {
     const canReport = isVolunteer && post.deviceId !== getDeviceId();
     const isAnnouncement = post.role === 'operator';
     return `<article class="feed-post ${isAnnouncement ? 'feed-announcement' : ''}">
-      <div class="feed-post-head"><div><span class="feed-author">${esc(post.author || 'Volunteer')}</span>
-        <span class="feed-meta"> · ${post.role === 'operator' ? 'Announcement' : feedPhaseLabel(post.phase || 'during')}</span></div>
+      <div class="feed-post-head"><div><span class="feed-author">${post.role === 'operator' ? esc(post.author || 'EARNT') : posterLink(id, post.deviceId, post.author || 'Volunteer')}</span>
+        ${post.role === 'operator' ? '<span class="feed-meta"> · Announcement</span>' : phasesOn ? `<span class="feed-meta"> · ${feedPhaseLabel(post.phase || 'during')}</span>` : ''}</div>
         <span class="feed-meta">${post.at ? fmtTime(post.at) : ''}</span></div>
       ${post.message ? `<div class="feed-message">${esc(post.message)}</div>` : ''}
       ${post.data ? `<img class="feed-image" src="${post.data}" loading="lazy" alt="Shared ${feedPhaseLabel(post.phase || 'during')} photo" onclick="openLightbox(this.src,'${feedPhaseLabel(post.phase || 'during')} · ${esc(post.author || 'Volunteer')}')">` : ''}
@@ -2163,9 +2212,9 @@ function renderFeed(j, id, opts = {}) {
   const composer = canPost ? `<div class="feed-compose">
     <textarea id="feedMessage" placeholder="Say something to the team" aria-label="Feed message"></textarea>
     <div class="feed-compose-row">
-      <select id="feedPostPhase" aria-label="Feed phase" style="flex:0 0 105px;padding:10px 6px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font-family:'IBM Plex Mono';font-size:.6rem;text-transform:uppercase">
+      ${phasesOn ? `<select id="feedPostPhase" aria-label="Feed phase" style="flex:0 0 105px;padding:10px 6px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font-family:'IBM Plex Mono';font-size:.6rem;text-transform:uppercase">
         <option value="before">Before</option><option value="during" selected>During</option><option value="after">After</option>
-      </select>
+      </select>` : ''}
       <button class="btn btn-sm btn-ink" type="button" onclick="submitFeedMessage('${id}')">Post</button>
       <button class="btn btn-sm btn-hivis" type="button" onclick="captureFeedPhoto('${id}')">Share photo</button>
     </div>
@@ -2173,14 +2222,21 @@ function renderFeed(j, id, opts = {}) {
   const moderation = isOperator && reports.length ? `<div class="legend-box" style="margin-top:12px"><b>Reports to review</b>${reports.map((report, index) => `<div class="mono" style="font-size:.64rem;margin-top:6px">${esc(report.reason)} · ${fmtTime(report.at)} <button class="link-btn" onclick="resolveFeedReport('${id}','${Object.keys(j.feedReports || {}).filter(key => j.feedReports[key].status === 'open')[index]}')">Resolve</button></div>`).join('')}</div>` : '';
   return `<section class="feed-card" aria-label="Job social feed">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:0">Team Feed</h2><span class="feed-meta">${allPosts.length} post${allPosts.length === 1 ? '' : 's'}</span></div>
+    ${isAdmin ? `<label class="switch-row"><span>Before / During / After tabs</span>
+      <input type="checkbox" class="switch" ${phasesOn ? 'checked' : ''} onchange="setFeedPhases('${id}', this.checked)"></label>` : ''}
     ${composer}
-    <div class="feed-tabs">
+    ${phasesOn ? `<div class="feed-tabs">
       ${[['all','All'],['before','Before'],['during','During'],['after','After']].map(([value,label]) => `<button class="feed-tab ${feedPhase === value ? 'active' : ''}" onclick="switchFeedPhase('${value}')">${label}</button>`).join('')}
-    </div>
+    </div>` : ''}
     ${postRows}${moderation}
   </section>`;
 }
 function switchFeedPhase(phase) { feedPhase = phase; render(); }
+function setFeedPhases(jobId, on) {
+  if (!on) feedPhase = 'all';
+  updatePath(jobId + '/feedPhasesEnabled', on);
+  toast(on ? 'Feed phase tabs on for this job' : 'Feed phase tabs hidden');
+}
 
 /* ---------- VOLUNTEER check-in page ---------- */
 function renderJob(app, id) {
