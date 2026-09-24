@@ -281,6 +281,7 @@ try { document.documentElement.setAttribute('data-theme', localStorage.getItem('
   .toggle-btn{font-family:'IBM Plex Mono';font-size:.62rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
     padding:7px 10px;border-radius:8px;border:1.5px solid var(--ink);background:var(--surface);color:var(--ink);cursor:pointer}
   .toggle-btn.on{background:var(--go);border-color:var(--go);color:#fff}
+  :root[data-theme="dark"] .toggle-btn.on:not(.reward){background:var(--surface-dark)}
   .toggle-btn.reward.on{background:var(--hivis);border-color:var(--hivis);color:#0B0B0A}
   .code-box{background:var(--surface-dark);color:var(--hivis);font-family:'IBM Plex Mono';font-size:1.3rem;font-weight:700;
     letter-spacing:.15em;text-align:center;padding:16px;border-radius:10px;margin:10px 0}
@@ -296,6 +297,9 @@ try { document.documentElement.setAttribute('data-theme', localStorage.getItem('
   .lightbox img{max-width:100%;max-height:80vh;border-radius:10px}
   .lightbox .lb-meta{font-family:'IBM Plex Mono';font-size:.66rem;color:#ccc;margin-top:12px;text-align:center}
   .lightbox .lb-actions{display:flex;gap:8px;margin-top:14px}
+  .lightbox .lb-share{margin-top:12px;max-width:340px;text-align:center}
+  .lightbox .lb-share-note{font-family:'IBM Plex Mono';font-size:.62rem;color:#ccc;line-height:1.5}
+  .lightbox .lb-share .lb-actions{justify-content:center}
   .lightbox .lb-close{position:absolute;top:16px;right:16px;background:#fff;border:none;width:38px;height:38px;
     border-radius:50%;font-size:1.1rem;cursor:pointer}
   .banner{background:var(--hivis);color:#0B0B0A;border-radius:10px;padding:10px 14px;font-size:.78rem;font-weight:600;margin:14px 0}
@@ -339,6 +343,13 @@ try { document.documentElement.setAttribute('data-theme', localStorage.getItem('
   <div class="lb-actions" id="lbActions" onclick="event.stopPropagation()">
     <button class="btn btn-sm btn-hivis" onclick="downloadLightboxPhoto()">Download</button>
     <button class="btn btn-sm btn-ghost" style="color:#fff;border-color:#fff" onclick="shareLightboxPhoto()">Share</button>
+  </div>
+  <div class="lb-share hidden" id="lbShare" onclick="event.stopPropagation()">
+    <div class="lb-share-note">Sharing straight to apps isn't available in this browser. Copy the image, then paste it into WhatsApp, email, Slack, etc.</div>
+    <div class="lb-actions" style="margin-top:8px">
+      <button class="btn btn-sm btn-hivis" onclick="copyLightboxPhoto()">Copy image</button>
+      <button class="btn btn-sm btn-ghost" style="color:#fff;border-color:#fff" onclick="downloadLightboxPhoto()">Download</button>
+    </div>
   </div>
 </div>
 <div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this) closeModal()">
@@ -1408,6 +1419,7 @@ window.addEventListener('focus', () => {
 function openLightbox(src, meta) {
   $('lbImg').src = src; $('lbMeta').textContent = meta;
   $('lbActions').classList.toggle('hidden', !isAdmin); // download/share is admin-only
+  $('lbShare').classList.add('hidden');
   $('lightbox').classList.add('open');
 }
 function lightboxFileName() {
@@ -1427,11 +1439,26 @@ async function downloadLightboxPhoto() {
   } catch (err) { toast('Download failed: ' + err.message); }
 }
 async function shareLightboxPhoto() {
+  let file;
+  try { file = await lightboxPhotoFile(); } catch (err) { return toast('Share failed: ' + err.message); }
+  // Use the device's share sheet when it can take files (phones, Safari on Mac, Windows).
+  if (navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))) {
+    try { await navigator.share({files:[file], title:'EARNT photo'}); return; }
+    catch (err) { if (err.name === 'AbortError') return; }
+  }
+  // Otherwise (e.g. Chrome/Firefox on desktop) offer copy-to-clipboard or download.
+  $('lbShare').classList.remove('hidden');
+}
+async function copyLightboxPhoto() {
   try {
-    const file = await lightboxPhotoFile();
-    if (navigator.canShare && navigator.canShare({files:[file]})) await navigator.share({files:[file], title:'EARNT photo'});
-    else { toast('Sharing isn\'t supported here — downloading instead'); downloadLightboxPhoto(); }
-  } catch (err) { if (err.name !== 'AbortError') toast('Share failed: ' + err.message); }
+    const img = $('lbImg'), canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+    canvas.getContext('2d').drawImage(img, 0, 0);
+    // Clipboard images must be PNG in most browsers; pass a promise so Safari keeps the user gesture.
+    const png = new Promise((res, rej) => canvas.toBlob(b => b ? res(b) : rej(new Error('Could not read image')), 'image/png'));
+    await navigator.clipboard.write([new ClipboardItem({'image/png': png})]);
+    toast('Image copied — paste it wherever you want to share it');
+  } catch (err) { toast('Copy isn\'t supported here — use Download instead'); }
 }
 function closeLightbox() { $('lightbox').classList.remove('open'); }
 
