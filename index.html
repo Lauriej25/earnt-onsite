@@ -542,21 +542,15 @@ function getVisitorId() {
   if (!id) { id = 'v' + Math.random().toString(36).slice(2,10) + Date.now().toString(36); localStorage.setItem('earnt_visitor_id', id); }
   return id;
 }
-function updateScanRecord(jobId, visitorId, patch, create) {
+// One record per visitor, stored at scanVisitors/<visitorId>. A fixed key (rather than
+// query-then-push) means concurrent renders can never create duplicate rows for one person.
+function applyScanRecord(jobId, visitorId, fn) {
   if (DEMO) {
-    jobs[jobId].scanVisitors = jobs[jobId].scanVisitors || {};
-    const existingKey = Object.keys(jobs[jobId].scanVisitors).find(key => jobs[jobId].scanVisitors[key].visitorId === visitorId);
-    if (existingKey) jobs[jobId].scanVisitors[existingKey] = {...jobs[jobId].scanVisitors[existingKey], ...patch};
-    else jobs[jobId].scanVisitors['s' + Math.random().toString(36).slice(2,9)] = {...create, ...patch};
-    return;
+    const scans = jobs[jobId].scanVisitors = jobs[jobId].scanVisitors || {};
+    scans[visitorId] = fn(scans[visitorId] || null);
+    return Promise.resolve();
   }
-  const ref = db.ref('jobs/' + jobId + '/scanVisitors');
-  ref.orderByChild('visitorId').equalTo(visitorId).once('value').then(snapshot => {
-    const values = snapshot.val() || {};
-    const key = Object.keys(values)[0];
-    if (key) ref.child(key).update(patch);
-    else ref.push({...create, ...patch});
-  });
+  return db.ref('jobs/' + jobId + '/scanVisitors/' + visitorId).transaction(fn);
 }
 function recordQrScan(jobId) {
   const visitorId = getVisitorId();
@@ -569,36 +563,24 @@ function recordQrScan(jobId) {
   const now = Date.now();
   localStorage.setItem(scanCacheKey, String(now));
   const registered = preRegisteredForJobId === jobId && !!portalVolunteerId;
-  const base = {visitorId, deviceId:getDeviceId(), registered, firstSeenAt:now, lastSeenAt:now, scanCount:1, checkinId:null, status:'new'};
-  if (DEMO) {
-    const scans = jobs[jobId].scanVisitors || {};
-    const key = Object.keys(scans).find(k => scans[k].visitorId === visitorId);
-    if (key && now - (scans[key].lastSeenAt || 0) < 30 * 60 * 1000) {
-      scans[key] = {...scans[key], lastSeenAt:now, scanCount:(scans[key].scanCount || 0) + 1, registered};
-    } else if (!key) {
-      scans['s' + Math.random().toString(36).slice(2,9)] = base;
-    } else {
-      scans[key] = {...scans[key], lastSeenAt:now, scanCount:(scans[key].scanCount || 0) + 1, registered};
-    }
-    jobs[jobId].scanVisitors = scans;
-    scanWriteInFlight[writeKey] = false;
-    return;
-  }
-  const ref = db.ref('jobs/' + jobId + '/scanVisitors');
-  ref.orderByChild('visitorId').equalTo(visitorId).once('value').then(snapshot => {
-    const values = snapshot.val() || {}, key = Object.keys(values)[0];
-    if (key && now - (values[key].lastSeenAt || 0) < 30 * 60 * 1000) {
-      ref.child(key).update({lastSeenAt:now, scanCount:(values[key].scanCount || 0) + 1, registered});
-    } else if (key) {
-      ref.child(key).update({lastSeenAt:now, scanCount:(values[key].scanCount || 0) + 1, registered});
-    } else ref.push(base);
-  }).finally(() => { scanWriteInFlight[writeKey] = false; });
+  applyScanRecord(jobId, visitorId, cur => cur
+    ? {...cur, lastSeenAt:now, scanCount:(cur.scanCount || 0) + 1, registered}
+    : {visitorId, deviceId:getDeviceId(), registered, firstSeenAt:now, lastSeenAt:now, scanCount:1, checkinId:null, status:'new'}
+  ).finally(() => { scanWriteInFlight[writeKey] = false; });
 }
 function enrichQrScan(jobId, checkinId) {
   const visitorId = getVisitorId();
   const patch = {visitorId, registered:!!portalVolunteerId, firstName:volunteerFirstName, lastName:volunteerLastName,
-    name:volunteerName, phone:volunteerPhone, email:volunteerEmail, checkinId:checkinId || null, lastSeenAt:Date.now()};
-  updateScanRecord(jobId, visitorId, patch, patch);
+    name:volunteerName, phone:volunteerPhone, email:volunteerEmail, checkinId:checkinId || null};
+  // Called on every render — skip the write when nothing has changed, otherwise each write
+  // triggers a re-render which triggers another write.
+  const existing = ((jobs[jobId] || {}).scanVisitors || {})[visitorId];
+  if (existing && !checkinId && existing.checkinId) delete patch.checkinId;
+  if (existing && Object.keys(patch).every(k => (existing[k] ?? null) === (patch[k] ?? null))) return;
+  const now = Date.now();
+  applyScanRecord(jobId, visitorId, cur => cur
+    ? {...cur, ...patch, lastSeenAt:now}
+    : {deviceId:getDeviceId(), firstSeenAt:now, scanCount:1, status:'new', ...patch, lastSeenAt:now});
 }
 function newId() { return DEMO ? 'j' + Math.random().toString(36).slice(2, 9) : db.ref('jobs').push().key; }
 function deleteJob(id) { if (DEMO) { delete jobs[id]; render(); } else db.ref('jobs/' + id).remove(); }
@@ -2033,13 +2015,26 @@ function updateScanVisitor(jobId, visitorKey, status) {
 }
 function deleteScanVisitor(jobId, visitorKey) {
   requestDelete('scanVisitor', jobId + '::' + visitorKey, 'QR visitor', () => {
-    if (DEMO) { delete jobs[jobId].scanVisitors[visitorKey]; render(); }
-    else db.ref('jobs/' + jobId + '/scanVisitors/' + visitorKey).remove();
+    const scans = jobs[jobId].scanVisitors || {}, vid = (scans[visitorKey] || {}).visitorId || visitorKey;
+    const keys = Object.keys(scans).filter(k => k === visitorKey || scans[k].visitorId === vid);
+    if (DEMO) { keys.forEach(k => delete scans[k]); render(); }
+    else db.ref('jobs/' + jobId + '/scanVisitors').update(Object.fromEntries(keys.map(k => [k, null])));
   }, {confirmMsg:'Delete this QR visitor? You have 15 seconds to undo it.', undoText:'QR visitor deleted'});
 }
 function scanVisitorSection(j, id) {
   if (!isAdmin) return '';
-  const scans = Object.entries(j.scanVisitors || {}).sort((a,b) => (b[1].lastSeenAt || 0) - (a[1].lastSeenAt || 0));
+  // Older records were pushed under random keys and could be duplicated per visitor —
+  // show one row per visitorId, preferring the record keyed by the visitorId itself.
+  const byVisitor = {};
+  Object.entries(j.scanVisitors || {}).forEach(([key, scan]) => {
+    const vid = scan.visitorId || key, prev = byVisitor[vid];
+    if (!prev) { byVisitor[vid] = [key, scan]; return; }
+    const keep = key === vid || (prev[0] !== vid && (scan.lastSeenAt || 0) > (prev[1].lastSeenAt || 0)) ? [key, scan] : prev;
+    const other = keep === prev ? scan : prev[1];
+    byVisitor[vid] = [keep[0], {...other, ...keep[1], name:keep[1].name || other.name, email:keep[1].email || other.email,
+      phone:keep[1].phone || other.phone, checkinId:keep[1].checkinId || other.checkinId, registered:keep[1].registered || other.registered}];
+  });
+  const scans = Object.values(byVisitor).sort((a,b) => (b[1].lastSeenAt || 0) - (a[1].lastSeenAt || 0));
   const scanRows = scans.length ? scans.map(([visitorKey, scan]) => `<div class="roster-row">
       <div class="rr-top"><div><div class="rr-name">${esc(scan.name || 'QR visitor')}</div>
         <div class="rr-time">${scan.registered ? 'Registered' : 'Not registered'} · ${scan.scanCount || 1} scan${(scan.scanCount || 1) === 1 ? '' : 's'} · last seen ${fmtTime(scan.lastSeenAt)}</div>
