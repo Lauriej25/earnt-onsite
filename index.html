@@ -222,6 +222,11 @@ try { document.documentElement.setAttribute('data-theme', localStorage.getItem('
   .feed-post:first-child{border-top:0;padding-top:0}
   .feed-post-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
   .feed-author{font-weight:700;font-size:.78rem}
+  .feed-reactions{display:flex;gap:6px;margin-top:8px}
+  .feed-react{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border:1px solid var(--line);border-radius:99px;background:var(--surface);color:var(--ink);font-size:.9rem;line-height:1;cursor:pointer;transition:transform .1s}
+  .feed-react span{font-family:'IBM Plex Mono';font-size:.62rem;font-weight:600}
+  .feed-react.mine{border-color:var(--go);background:var(--go-light)}
+  .feed-react:active{transform:scale(.92)}
   .switch-row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:10px;padding:8px 10px;border:1px dashed var(--line);border-radius:8px;font-family:'IBM Plex Mono';font-size:.6rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);cursor:pointer}
   .switch{appearance:none;-webkit-appearance:none;position:relative;flex:0 0 38px;width:38px;height:22px;margin:0;border-radius:99px;background:var(--line);cursor:pointer;transition:background .15s}
   .switch::before{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);transition:transform .15s}
@@ -290,6 +295,7 @@ try { document.documentElement.setAttribute('data-theme', localStorage.getItem('
   .lightbox.open{display:flex}
   .lightbox img{max-width:100%;max-height:80vh;border-radius:10px}
   .lightbox .lb-meta{font-family:'IBM Plex Mono';font-size:.66rem;color:#ccc;margin-top:12px;text-align:center}
+  .lightbox .lb-actions{display:flex;gap:8px;margin-top:14px}
   .lightbox .lb-close{position:absolute;top:16px;right:16px;background:#fff;border:none;width:38px;height:38px;
     border-radius:50%;font-size:1.1rem;cursor:pointer}
   .banner{background:var(--hivis);color:#0B0B0A;border-radius:10px;padding:10px 14px;font-size:.78rem;font-weight:600;margin:14px 0}
@@ -330,6 +336,10 @@ try { document.documentElement.setAttribute('data-theme', localStorage.getItem('
   <button class="lb-close" aria-label="Close">✕</button>
   <img id="lbImg" alt="Job photo">
   <div class="lb-meta" id="lbMeta"></div>
+  <div class="lb-actions" id="lbActions" onclick="event.stopPropagation()">
+    <button class="btn btn-sm btn-hivis" onclick="downloadLightboxPhoto()">Download</button>
+    <button class="btn btn-sm btn-ghost" style="color:#fff;border-color:#fff" onclick="shareLightboxPhoto()">Share</button>
+  </div>
 </div>
 <div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this) closeModal()">
   <div class="modal-box">
@@ -616,10 +626,18 @@ function feedAuthor(roleOverride) {
   if (roleOverride === 'operator') return {name:isAdmin ? 'EARNT' : (currentBrandId && brands[currentBrandId] ? brands[currentBrandId].name : 'Cause'), role:'operator'};
   if (isAdmin) return {name:'EARNT', role:'operator'};
   if (currentBrandId && brands[currentBrandId]) return {name:brands[currentBrandId].name, role:'operator'};
-  return {name:volunteerName || 'Volunteer', role:'volunteer'};
+  return {name:volunteerNameFor(activeJobId), role:'volunteer'};
+}
+// Best available name for this device: in-memory, saved on this device, then this job's
+// check-in / QR visitor records for this device. Only falls back to 'Volunteer' if all are empty.
+function volunteerNameFor(jobId) {
+  const j = jobs[jobId] || {}, dev = getDeviceId(), vid = getVisitorId();
+  const checkin = Object.values(j.checkins || {}).filter(c => c.deviceId === dev && c.name).sort((a,b) => (b.inAt || 0) - (a.inAt || 0))[0];
+  const visitor = Object.values(j.scanVisitors || {}).find(v => (v.visitorId === vid || v.deviceId === dev) && v.name);
+  return volunteerName || localStorage.getItem('earnt_volunteer_name') || (checkin && checkin.name) || (visitor && visitor.name) || 'Volunteer';
 }
 function feedCanPost(j, isVolunteer, isOperator) { return isOperator || isAdmin || !!(currentBrandId && brands[currentBrandId]) || isVolunteer; }
-function feedPost(jobId, post) { return pushPath(jobId + '/feedPosts', {...post, ...feedAuthor(feedPostingRole), at:Date.now()}); }
+function feedPost(jobId, post) { activeJobId = jobId; return pushPath(jobId + '/feedPosts', {...post, ...feedAuthor(feedPostingRole), at:Date.now()}); }
 function deleteFeedPost(jobId, postId) {
   const post = jobs[jobId] && jobs[jobId].feedPosts && jobs[jobId].feedPosts[postId];
   if (!post) return;
@@ -674,7 +692,7 @@ function requestDelete(kind, id, label, doDelete, opts) {
   opts = opts || {};
   const confirmMsg = opts.confirmMsg || `Delete "${label}"? You'll have 15 seconds to undo this before it's gone for good.`;
   const undoText = opts.undoText || `"${esc(label)}" deleted`;
-  if (!confirm(confirmMsg)) return false;
+  if (!opts.skipConfirm && !confirm(confirmMsg)) return false;
   if (pendingDelete) finalizePendingDelete();
   hiddenIds.add(kind + ':' + id);
   pendingDelete = {kind, id, label, doDelete, secondsLeft: 15, timer: null, undoText};
@@ -930,7 +948,7 @@ function causeUrl(id) { return location.origin + location.pathname + '#cause/' +
 function mapsLink(lat, lng) { return 'https://www.google.com/maps/search/?api=1&query=' + lat + ',' + lng; }
 function photoThumb(jobId, ph, label, showBy) {
   const del = isAdmin ? `<button class="photo-del" onclick="event.stopPropagation();requestDelete('photo','${jobId}::${ph.id}','photo',()=>deletePhoto('${jobId}','${ph.id}'))">✕</button>` : '';
-  const by = showBy && isAdmin ? `<div class="photo-by">${posterLink(jobId, ph.deviceId, ph.by || 'Volunteer')}</div>` : '';
+  const by = showBy && isAdmin ? `<div class="photo-by">${posterLink(jobId, ph.deviceId, ph.by && ph.by !== 'Volunteer' ? ph.by : posterDetails(jobId, ph.deviceId, null).name.replace(/^Unknown$/, 'Volunteer'))}</div>` : '';
   const thumb = `<div class="photo-wrap"><img src="${ph.data}" loading="lazy" onclick="openLightbox(this.src,'${label}')">${del}</div>`;
   return by ? `<div>${thumb}${by}</div>` : thumb;
 }
@@ -1369,7 +1387,7 @@ $('photoInput').addEventListener('change', async e => {
   for (const f of files) {
     try {
       const data = await compress(f);
-      pushPath(activeJobId + '/photos', {phase:currentPhase, data, at:Date.now(), by:volunteerName||'Volunteer', lat:gps?gps.lat:null, lng:gps?gps.lng:null, deviceId:myDeviceId});
+      pushPath(activeJobId + '/photos', {phase:currentPhase, data, at:Date.now(), by:volunteerNameFor(activeJobId), lat:gps?gps.lat:null, lng:gps?gps.lng:null, deviceId:myDeviceId});
     } catch (err) { toast('One photo failed: ' + err.message); }
   }
   toast('Added to ' + currentPhase.toUpperCase());
@@ -1387,7 +1405,34 @@ window.addEventListener('focus', () => {
 });
 
 /* ---------- lightbox ---------- */
-function openLightbox(src, meta) { $('lbImg').src = src; $('lbMeta').textContent = meta; $('lightbox').classList.add('open'); }
+function openLightbox(src, meta) {
+  $('lbImg').src = src; $('lbMeta').textContent = meta;
+  $('lbActions').classList.toggle('hidden', !isAdmin); // download/share is admin-only
+  $('lightbox').classList.add('open');
+}
+function lightboxFileName() {
+  const slug = ($('lbMeta').textContent || 'photo').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase().slice(0, 60);
+  return 'earnt-' + (slug || 'photo') + '.jpg';
+}
+async function lightboxPhotoFile() {
+  const blob = await (await fetch($('lbImg').src)).blob();
+  return new File([blob], lightboxFileName(), {type: blob.type || 'image/jpeg'});
+}
+async function downloadLightboxPhoto() {
+  try {
+    const file = await lightboxPhotoFile(), url = URL.createObjectURL(file);
+    const a = document.createElement('a'); a.href = url; a.download = file.name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (err) { toast('Download failed: ' + err.message); }
+}
+async function shareLightboxPhoto() {
+  try {
+    const file = await lightboxPhotoFile();
+    if (navigator.canShare && navigator.canShare({files:[file]})) await navigator.share({files:[file], title:'EARNT photo'});
+    else { toast('Sharing isn\'t supported here — downloading instead'); downloadLightboxPhoto(); }
+  } catch (err) { if (err.name !== 'AbortError') toast('Share failed: ' + err.message); }
+}
 function closeLightbox() { $('lightbox').classList.remove('open'); }
 
 /* ---------- router ---------- */
@@ -2058,15 +2103,34 @@ function activityLogSection(j, id) {
 
 function updateScanVisitor(jobId, visitorKey, status) {
   updatePath(jobId + '/scanVisitors/' + visitorKey + '/status', status);
-  toast('Visitor updated');
+  toast(status === 'complete' ? 'Marked complete' : 'Unregistered — feed access removed');
+}
+function visitorPostKeys(jobId, visitorKey) {
+  const j = jobs[jobId] || {}, dev = ((j.scanVisitors || {})[visitorKey] || {}).deviceId;
+  return dev ? Object.keys(j.feedPosts || {}).filter(k => j.feedPosts[k].role !== 'operator' && j.feedPosts[k].deviceId === dev) : [];
 }
 function deleteScanVisitor(jobId, visitorKey) {
+  const v = ((jobs[jobId] || {}).scanVisitors || {})[visitorKey] || {};
+  const n = visitorPostKeys(jobId, visitorKey).length;
+  showModal('Remove ' + (v.name || 'QR visitor'), `
+    <div style="font-size:.84rem;margin-bottom:14px">This removes them from the visitor list and takes away their feed access.
+      They have <b>${n} feed post${n === 1 ? '' : 's'}</b> on this job.</div>
+    ${n ? `<button class="btn btn-sm" style="width:100%;margin-bottom:8px;background:var(--stop);border-color:var(--stop);color:#fff" onclick="closeModal();removeScanVisitor('${jobId}','${visitorKey}',true)">Remove &amp; delete their ${n} post${n === 1 ? '' : 's'}</button>` : ''}
+    <button class="btn btn-sm btn-ink" style="width:100%;margin-bottom:8px" onclick="closeModal();removeScanVisitor('${jobId}','${visitorKey}',false)">Remove${n ? ', keep their posts' : ''}</button>
+    <button class="btn btn-sm btn-ghost" style="width:100%" onclick="closeModal()">Cancel</button>`);
+}
+function removeScanVisitor(jobId, visitorKey, withPosts) {
+  const postKeys = withPosts ? visitorPostKeys(jobId, visitorKey) : [];
   requestDelete('scanVisitor', jobId + '::' + visitorKey, 'QR visitor', () => {
-    const scans = jobs[jobId].scanVisitors || {}, vid = (scans[visitorKey] || {}).visitorId || visitorKey;
+    const j = jobs[jobId]; if (!j) return;
+    const scans = j.scanVisitors || {}, vid = (scans[visitorKey] || {}).visitorId || visitorKey;
     const keys = Object.keys(scans).filter(k => k === visitorKey || scans[k].visitorId === vid);
-    if (DEMO) { keys.forEach(k => delete scans[k]); render(); }
-    else db.ref('jobs/' + jobId + '/scanVisitors').update(Object.fromEntries(keys.map(k => [k, null])));
-  }, {confirmMsg:'Delete this QR visitor? You have 15 seconds to undo it.', undoText:'QR visitor deleted'});
+    const updates = {};
+    keys.forEach(k => updates['scanVisitors/' + k] = null);
+    postKeys.forEach(k => updates['feedPosts/' + k] = null);
+    if (DEMO) { keys.forEach(k => delete scans[k]); postKeys.forEach(k => j.feedPosts && delete j.feedPosts[k]); render(); }
+    else db.ref('jobs/' + jobId).update(updates);
+  }, {skipConfirm:true, undoText: withPosts && postKeys.length ? 'Visitor & ' + postKeys.length + ' post' + (postKeys.length === 1 ? '' : 's') + ' removed' : 'QR visitor removed'});
 }
 function scanVisitorSection(j, id) {
   if (!isAdmin) return '';
@@ -2088,7 +2152,11 @@ function scanVisitorSection(j, id) {
         ${scan.email ? `<div class="rr-time">${esc(scan.email)}${scan.phone ? ' · '+esc(scan.phone) : ''}</div>` : ''}
       </div><div style="display:flex;align-items:center;gap:6px"><span class="badge ${scan.registered ? 'badge-verified' : 'badge-unverified'}">${scan.registered ? 'Registered' : 'Unregistered'}</span><button class="photo-del" style="position:static" aria-label="Delete QR visitor" onclick="deleteScanVisitor('${id}','${visitorKey}')">✕</button></div></div>
       <div class="rr-time">${scan.checkinId ? 'Check-in recorded' : 'New visitor'} · ${scan.status === 'complete' ? 'Complete' : 'Needs follow-up'}</div>
-      ${!scan.registered && !scan.checkinId ? `<button class="toggle-btn" style="margin-top:8px" onclick="updateScanVisitor('${id}','${visitorKey}','complete')">Mark Complete</button>` : ''}
+      ${scan.status === 'complete'
+        ? `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><span class="toggle-btn on" style="cursor:default">✓ Complete</span>
+            <button class="toggle-btn" onclick="updateScanVisitor('${id}','${visitorKey}','new')">Unregister</button>
+            <button class="toggle-btn" style="border-color:var(--stop);color:var(--stop)" onclick="deleteScanVisitor('${id}','${visitorKey}')">Remove…</button></div>`
+        : !scan.registered && !scan.checkinId ? `<button class="toggle-btn" style="margin-top:8px" onclick="updateScanVisitor('${id}','${visitorKey}','complete')">Mark Complete</button>` : ''}
     </div>`).join('') : '<div class="muted" style="font-size:.8rem">No QR scans recorded yet.</div>';
   return `<div class="card"><h2>New QR Visitors</h2><div class="legend-box"><b>${scans.length} unique visitor${scans.length === 1 ? '' : 's'}</b>Repeated scans from the same device are grouped for 30 minutes. Scanning does not count as check-in.</div>${scanRows}</div>`;
 }
@@ -2198,11 +2266,12 @@ function renderFeed(j, id, opts = {}) {
     const canReport = isVolunteer && post.deviceId !== getDeviceId();
     const isAnnouncement = post.role === 'operator';
     return `<article class="feed-post ${isAnnouncement ? 'feed-announcement' : ''}">
-      <div class="feed-post-head"><div><span class="feed-author">${post.role === 'operator' ? esc(post.author || 'EARNT') : posterLink(id, post.deviceId, post.author || 'Volunteer')}</span>
+      <div class="feed-post-head"><div><span class="feed-author">${post.role === 'operator' ? esc(post.author || 'EARNT') : posterLink(id, post.deviceId, post.author && post.author !== 'Volunteer' ? post.author : (isAdmin ? posterDetails(id, post.deviceId, null).name.replace(/^Unknown$/, 'Volunteer') : 'Volunteer'))}</span>
         ${post.role === 'operator' ? '<span class="feed-meta"> · Announcement</span>' : phasesOn ? `<span class="feed-meta"> · ${feedPhaseLabel(post.phase || 'during')}</span>` : ''}</div>
         <span class="feed-meta">${post.at ? fmtTime(post.at) : ''}</span></div>
       ${post.message ? `<div class="feed-message">${esc(post.message)}</div>` : ''}
       ${post.data ? `<img class="feed-image" src="${post.data}" loading="lazy" alt="Shared ${feedPhaseLabel(post.phase || 'during')} photo" onclick="openLightbox(this.src,'${feedPhaseLabel(post.phase || 'during')} · ${esc(post.author || 'Volunteer')}')">` : ''}
+      ${feedReactionsBar(id, post)}
       <div class="feed-actions">
         ${canDelete ? `<button class="link-btn" onclick="deleteFeedPost('${id}','${post.id}')">Delete</button>` : ''}
         ${canReport ? `<button class="link-btn" onclick="reportFeedPost('${id}','${post.id}')">Report</button>` : ''}
@@ -2232,6 +2301,22 @@ function renderFeed(j, id, opts = {}) {
   </section>`;
 }
 function switchFeedPhase(phase) { feedPhase = phase; render(); }
+/* Reactions: stored at feedPosts/<postId>/reactions/<deviceId> = emoji key, so each
+   person has at most one reaction per post. Same emoji again removes it; another swaps it. */
+const FEED_REACTIONS = [['happy','😊'],['thumbs','👍'],['party','🎉']];
+function feedReactionsBar(jobId, post) {
+  const reactions = post.reactions || {}, mine = reactions[getDeviceId()];
+  return `<div class="feed-reactions">${FEED_REACTIONS.map(([key, emoji]) => {
+    const count = Object.values(reactions).filter(r => r === key).length;
+    return `<button class="feed-react ${mine === key ? 'mine' : ''}" aria-pressed="${mine === key}" aria-label="React ${emoji}" onclick="reactToPost('${jobId}','${post.id}','${key}')">${emoji}${count ? `<span>${count}</span>` : ''}</button>`;
+  }).join('')}</div>`;
+}
+function reactToPost(jobId, postId, key) {
+  const post = jobs[jobId] && jobs[jobId].feedPosts && jobs[jobId].feedPosts[postId];
+  if (!post) return;
+  const dev = getDeviceId(), current = (post.reactions || {})[dev];
+  updatePath(jobId + '/feedPosts/' + postId + '/reactions/' + dev, current === key ? null : key);
+}
 function setFeedPhases(jobId, on) {
   if (!on) feedPhase = 'all';
   updatePath(jobId + '/feedPhasesEnabled', on);
