@@ -1272,7 +1272,9 @@ function compress(file) {
   });
 }
 $('photoInput').addEventListener('change', async e => {
-  const files = [...e.target.files];
+  const pickedFiles = [...e.target.files];
+  const files = pickedFiles.slice(0, 6);
+  if (pickedFiles.length > 6) toast('Only the first 6 photos were selected to keep the event moving');
   const myDeviceId = getDeviceId();
 
   if (captureIntent === 'feed') {
@@ -2212,6 +2214,8 @@ function renderJob(app, id) {
   const me = myKey ? j.checkins[myKey] : null;
   const closedKey = lastEntry && lastEntry[1].outAt ? lastEntry[0] : null;
   const closedMe = closedKey ? j.checkins[closedKey] : null;
+  const visitorRecord = Object.values(j.scanVisitors || {}).find(visitor => visitor.visitorId === getVisitorId());
+  const isListed = !!(portalVolunteerId || (visitorRecord && visitorRecord.status === 'complete'));
   const dr = me || closedMe; // whichever record is relevant to display in the stamps row
   const outsideDates = !!(j.date && (todayStr() < j.date || todayStr() > (j.endDate || j.date)));
   if (me) {
@@ -2225,7 +2229,7 @@ function renderJob(app, id) {
   // manual override on the QR/roster page instead.
   const isOverrideViewer = isAdmin || (currentBrandId && j.brandId === currentBrandId);
   const hasValidInvite = preRegisteredForJobId === id;
-  if (j.requiresPreRegistration && !hasValidInvite && !isOverrideViewer && !me && !closedMe) {
+  if (j.requiresPreRegistration && !hasValidInvite && !isListed && !isOverrideViewer && !me && !closedMe) {
     $('hdrSub').textContent = 'Invite only';
     app.innerHTML = `<div style="margin:20px 0 6px"><h1>${esc(j.name)}</h1></div>
       <div class="pending-card"><div class="p-icon">🔒</div><div style="font-weight:700;margin-top:6px">This job is invite-only</div>
@@ -2322,7 +2326,7 @@ function renderJob(app, id) {
       <div class="phase-tabs">${['before','during','after'].map(p => `<button class="phase-tab ${currentPhase===p?'active':''}" data-phase="${p}" onclick="switchPhase('${p}')">${p}${phasePhotos(p).length?' ('+phasePhotos(p).length+')':''}</button>`).join('')}</div>
       ${['before','during','after'].map(phaseBlock).join('')}
     </div>` : `<div class="card muted" style="text-align:center;font-size:.8rem">Photo evidence opens up on ${esc(j.date)}${j.endDate && j.endDate!==j.date ? '–'+esc(j.endDate) : ''}.</div>`}
-    ${me || closedMe ? renderFeed(j, id, {isVolunteer:true}) : ''}`;
+    ${me || closedMe || isListed ? renderFeed(j, id, {isVolunteer:true}) : ''}`;
   initViewMap('jobViewMap', j.lat, j.lng);
 }
 // Every phase's photo grid is already in the DOM (just hidden) — flip visibility
