@@ -213,6 +213,27 @@ try { document.documentElement.setAttribute('data-theme', localStorage.getItem('
   .photo-wrap{position:relative}
   .photo-del{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;background:rgba(11,11,10,.75);
     color:#fff;border:none;font-size:.75rem;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2}
+  .feed-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px}
+  .feed-tabs{display:flex;gap:6px;margin:10px 0 14px}
+  .feed-tab{flex:1;border:1.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--muted);
+    padding:9px 4px;font-family:'IBM Plex Mono';font-size:.6rem;text-transform:uppercase;cursor:pointer}
+  .feed-tab.active{background:var(--surface-dark);border-color:var(--surface-dark);color:#fff}
+  .feed-post{border-top:1px solid var(--line);padding:12px 0}
+  .feed-post:first-child{border-top:0;padding-top:0}
+  .feed-post-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+  .feed-author{font-weight:700;font-size:.78rem}
+  .feed-meta{font-family:'IBM Plex Mono';font-size:.56rem;color:var(--muted)}
+  .feed-message{font-size:.86rem;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
+  .feed-image{display:block;width:100%;max-height:360px;object-fit:cover;border-radius:10px;border:1px solid var(--line);cursor:pointer;margin-top:8px}
+  .feed-actions{display:flex;gap:10px;margin-top:8px}
+  .feed-actions .link-btn{font-size:.6rem}
+  .feed-compose{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:14px;background:var(--card)}
+  .feed-compose textarea{min-height:64px;background:var(--surface)}
+  .feed-compose-row{display:flex;gap:8px;align-items:center;margin-top:8px}
+  .feed-compose-row .btn{flex:1}
+  .feed-announcement{border-left:4px solid var(--hivis);padding-left:12px;background:var(--pending-light);border-radius:4px}
+  .feed-empty{font-size:.8rem;color:var(--muted);text-align:center;padding:18px 4px}
+  @media (max-width:520px){.feed-compose-row .btn{font-size:.68rem;padding:11px 8px}.feed-image{max-height:280px}}
   .add-photo{aspect-ratio:1;border:1.5px dashed var(--ink);border-radius:8px;background:none;
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;
     font-family:'IBM Plex Mono';font-size:.58rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink)}
@@ -450,6 +471,9 @@ let activeJobId = null;
 let captureIntent = 'gallery'; // 'gallery' | 'checkin' | 'checkout'
 let pendingCheckin = null;
 let pendingCheckout = null;
+let feedPhase = 'all';
+let feedPostingRole = 'volunteer';
+let feedOperatorView = false;
 let pendingPin = null;
 function confirmPinNew() { if (!pendingPin) return toast('Place a pin on the map first'); toast('✓ Pin confirmed at ' + pendingPin.lat + ', ' + pendingPin.lng); }
 let newJobMapInstance = null;
@@ -530,6 +554,49 @@ function deleteVolunteerPhoto(jobId, photoId) {
     undoText: 'Photo deleted'
   });
 }
+function feedAuthor(roleOverride) {
+  if (roleOverride === 'operator') return {name:isAdmin ? 'EARNT' : (currentBrandId && brands[currentBrandId] ? brands[currentBrandId].name : 'Cause'), role:'operator'};
+  if (isAdmin) return {name:'EARNT', role:'operator'};
+  if (currentBrandId && brands[currentBrandId]) return {name:brands[currentBrandId].name, role:'operator'};
+  return {name:volunteerName || 'Volunteer', role:'volunteer'};
+}
+function feedCanPost(j, isVolunteer, isOperator) { return isOperator || isAdmin || !!(currentBrandId && brands[currentBrandId]) || isVolunteer; }
+function feedPost(jobId, post) { return pushPath(jobId + '/feedPosts', {...post, ...feedAuthor(feedPostingRole), at:Date.now()}); }
+function deleteFeedPost(jobId, postId) {
+  const post = jobs[jobId] && jobs[jobId].feedPosts && jobs[jobId].feedPosts[postId];
+  if (!post) return;
+  const mine = feedOperatorView || isAdmin || (post.deviceId && post.deviceId === getDeviceId()) || (post.author === volunteerName && post.role === 'volunteer');
+  if (!mine) return toast('Only the person who posted this can delete it');
+  requestDelete('feedPost', jobId + '::' + postId, 'feed post', () => {
+    if (DEMO) { delete jobs[jobId].feedPosts[postId]; render(); }
+    else db.ref('jobs/' + jobId + '/feedPosts/' + postId).remove();
+  }, {confirmMsg:'Delete this feed post? You have 15 seconds to undo it.', undoText:'Feed post deleted'});
+}
+function reportFeedPost(jobId, postId) {
+  const reason = prompt('What should EARNT review about this post?');
+  if (!reason || !reason.trim()) return;
+  pushPath(jobId + '/feedReports', {postId, reason:reason.trim(), by:volunteerName || (isAdmin ? 'EARNT' : 'Operator'), deviceId:getDeviceId(), at:Date.now(), status:'open'});
+  toast('Reported for review');
+}
+function resolveFeedReport(jobId, reportId) {
+  updatePath(jobId + '/feedReports/' + reportId + '/status', 'resolved');
+  toast('Report resolved');
+}
+function submitFeedMessage(jobId) {
+  const input = $('feedMessage');
+  const message = input ? input.value.trim() : '';
+  if (!message) return toast('Write a message first');
+  feedPost(jobId, {type:'message', phase:$('feedPostPhase')?.value || 'during', message, deviceId:getDeviceId()});
+  input.value = '';
+  toast('Posted to the feed');
+}
+function captureFeedPhoto(jobId) {
+  activeJobId = jobId; captureIntent = 'feed';
+  feedUploadPhase = $('feedPostPhase')?.value || 'during';
+  $('photoInput').value = ''; $('photoInput').click();
+}
+let feedUploadPhase = 'during';
+function feedPhaseLabel(phase) { return phase === 'before' ? 'Before' : phase === 'after' ? 'After' : 'During'; }
 function deleteCheckin(jobId, key) {
   const c = jobs[jobId] && jobs[jobId].checkins && jobs[jobId].checkins[key];
   if (c) { if (c.inPhotoId) deletePhoto(jobId, c.inPhotoId); if (c.outPhotoId) deletePhoto(jobId, c.outPhotoId); }
@@ -1147,6 +1214,20 @@ function compress(file) {
 $('photoInput').addEventListener('change', async e => {
   const files = [...e.target.files];
   const myDeviceId = getDeviceId();
+
+  if (captureIntent === 'feed') {
+    if (!files.length || !activeJobId) { captureIntent = 'gallery'; return; }
+    toast('Sharing ' + files.length + ' photo' + (files.length > 1 ? 's' : '') + '…', 8000);
+    for (const f of files) {
+      try {
+        const data = await compress(f);
+        feedPost(activeJobId, {type:'photo', phase:feedUploadPhase, data, deviceId:myDeviceId});
+      } catch (err) { toast('Photo failed: ' + err.message); }
+    }
+    captureIntent = 'gallery';
+    toast('Photo shared to the feed');
+    return;
+  }
 
   if (captureIntent === 'checkin') {
     if (!files.length || !pendingCheckin) { toast('A photo is required to check in — tap Check In to try again'); pendingCheckin = null; captureIntent = 'gallery'; render(); return; }
@@ -1787,6 +1868,7 @@ function renderQR(app, id) {
     <button class="btn btn-ghost no-print" onclick="openManualCheckinModal('${id}')">Check In a Volunteer Manually</button>` : ''}
     ${isAdmin ? `<div style="height:10px" class="no-print"></div>
     <button class="btn btn-ghost no-print" onclick="go('edit/${id}')">Edit Job</button>` : ''}
+    <div class="no-print">${renderFeed(j, id, {operator:true})}</div>
     <div class="no-print">${gallerySection()}</div>
     <div class="no-print">${rosterSection(j, id, {canVerify:isAdmin, canRelease:isAdmin, canExport:isAdmin, canDeleteCheckin:isAdmin})}</div>
     ${isAdmin ? `<div class="no-print">${activityLogSection(j, id)}</div>` : ''}
@@ -1963,6 +2045,56 @@ function exportJobCSV(id) {
   toast('CSV downloaded');
 }
 
+function renderFeed(j, id, opts = {}) {
+  const isVolunteer = !!opts.isVolunteer;
+  const isOperator = !!opts.operator;
+  feedPostingRole = isOperator ? 'operator' : 'volunteer';
+  feedOperatorView = isOperator;
+  const canPost = feedCanPost(j, isVolunteer, isOperator);
+  const posts = Object.entries(j.feedPosts || {})
+    .map(([key, post]) => ({id:key, ...post}))
+    .filter(post => feedPhase === 'all' || post.phase === feedPhase)
+    .sort((a,b) => (a.at || 0) - (b.at || 0));
+  const allPosts = Object.values(j.feedPosts || {});
+  const reports = Object.values(j.feedReports || {}).filter(report => report.status === 'open');
+  const postRows = posts.length ? posts.map(post => {
+    const canDelete = isOperator || isAdmin || (post.role === 'volunteer' && post.deviceId === getDeviceId());
+    const canReport = isVolunteer && post.deviceId !== getDeviceId();
+    const isAnnouncement = post.role === 'operator';
+    return `<article class="feed-post ${isAnnouncement ? 'feed-announcement' : ''}">
+      <div class="feed-post-head"><div><span class="feed-author">${esc(post.author || 'Volunteer')}</span>
+        <span class="feed-meta"> · ${post.role === 'operator' ? 'Announcement' : feedPhaseLabel(post.phase || 'during')}</span></div>
+        <span class="feed-meta">${post.at ? fmtTime(post.at) : ''}</span></div>
+      ${post.message ? `<div class="feed-message">${esc(post.message)}</div>` : ''}
+      ${post.data ? `<img class="feed-image" src="${post.data}" loading="lazy" alt="Shared ${feedPhaseLabel(post.phase || 'during')} photo" onclick="openLightbox(this.src,'${feedPhaseLabel(post.phase || 'during')} · ${esc(post.author || 'Volunteer')}')">` : ''}
+      <div class="feed-actions">
+        ${canDelete ? `<button class="link-btn" onclick="deleteFeedPost('${id}','${post.id}')">Delete</button>` : ''}
+        ${canReport ? `<button class="link-btn" onclick="reportFeedPost('${id}','${post.id}')">Report</button>` : ''}
+      </div>
+    </article>`;
+  }).join('') : '<div class="feed-empty">Nothing shared here yet. Start the story.</div>';
+  const composer = canPost ? `<div class="feed-compose">
+    <textarea id="feedMessage" placeholder="Say something to the team" aria-label="Feed message"></textarea>
+    <div class="feed-compose-row">
+      <select id="feedPostPhase" aria-label="Feed phase" style="flex:0 0 105px;padding:10px 6px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font-family:'IBM Plex Mono';font-size:.6rem;text-transform:uppercase">
+        <option value="before">Before</option><option value="during" selected>During</option><option value="after">After</option>
+      </select>
+      <button class="btn btn-sm btn-ink" type="button" onclick="submitFeedMessage('${id}')">Post</button>
+      <button class="btn btn-sm btn-hivis" type="button" onclick="captureFeedPhoto('${id}')">Share photo</button>
+    </div>
+  </div>` : '';
+  const moderation = isOperator && reports.length ? `<div class="legend-box" style="margin-top:12px"><b>Reports to review</b>${reports.map((report, index) => `<div class="mono" style="font-size:.64rem;margin-top:6px">${esc(report.reason)} · ${fmtTime(report.at)} <button class="link-btn" onclick="resolveFeedReport('${id}','${Object.keys(j.feedReports || {}).filter(key => j.feedReports[key].status === 'open')[index]}')">Resolve</button></div>`).join('')}</div>` : '';
+  return `<section class="feed-card" aria-label="Job social feed">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:0">Team Feed</h2><span class="feed-meta">${allPosts.length} post${allPosts.length === 1 ? '' : 's'}</span></div>
+    ${composer}
+    <div class="feed-tabs">
+      ${[['all','All'],['before','Before'],['during','During'],['after','After']].map(([value,label]) => `<button class="feed-tab ${feedPhase === value ? 'active' : ''}" onclick="switchFeedPhase('${value}')">${label}</button>`).join('')}
+    </div>
+    ${postRows}${moderation}
+  </section>`;
+}
+function switchFeedPhase(phase) { feedPhase = phase; render(); }
+
 /* ---------- VOLUNTEER check-in page ---------- */
 function renderJob(app, id) {
   const j = jobs[id];
@@ -2102,7 +2234,8 @@ function renderJob(app, id) {
       <div class="mono muted" style="font-size:.62rem;margin-bottom:10px">You'll only see your own photos here — the full team's story goes straight to ${esc(j.cause||'the Brand')} and EARNT.</div>
       <div class="phase-tabs">${['before','during','after'].map(p => `<button class="phase-tab ${currentPhase===p?'active':''}" data-phase="${p}" onclick="switchPhase('${p}')">${p}${phasePhotos(p).length?' ('+phasePhotos(p).length+')':''}</button>`).join('')}</div>
       ${['before','during','after'].map(phaseBlock).join('')}
-    </div>` : `<div class="card muted" style="text-align:center;font-size:.8rem">Photo evidence opens up on ${esc(j.date)}${j.endDate && j.endDate!==j.date ? '–'+esc(j.endDate) : ''}.</div>`}`;
+    </div>` : `<div class="card muted" style="text-align:center;font-size:.8rem">Photo evidence opens up on ${esc(j.date)}${j.endDate && j.endDate!==j.date ? '–'+esc(j.endDate) : ''}.</div>`}
+    ${me || closedMe ? renderFeed(j, id, {isVolunteer:true}) : ''}`;
   initViewMap('jobViewMap', j.lat, j.lng);
 }
 // Every phase's photo grid is already in the DOM (just hidden) — flip visibility
