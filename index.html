@@ -474,6 +474,7 @@ let pendingCheckout = null;
 let feedPhase = 'all';
 let feedPostingRole = 'volunteer';
 let feedOperatorView = false;
+let scanWriteInFlight = {};
 let pendingPin = null;
 function confirmPinNew() { if (!pendingPin) return toast('Place a pin on the map first'); toast('✓ Pin confirmed at ' + pendingPin.lat + ', ' + pendingPin.lng); }
 let newJobMapInstance = null;
@@ -535,6 +536,65 @@ function updatePath(path, val) {
 function pushPath(path, val) {
   if (DEMO) { const id = 'k' + Math.random().toString(36).slice(2, 9); updatePath(path + '/' + id, val); return id; }
   const ref = db.ref('jobs/' + path).push(); ref.set(val); return ref.key;
+}
+function getVisitorId() {
+  let id = localStorage.getItem('earnt_visitor_id');
+  if (!id) { id = 'v' + Math.random().toString(36).slice(2,10) + Date.now().toString(36); localStorage.setItem('earnt_visitor_id', id); }
+  return id;
+}
+function updateScanRecord(jobId, visitorId, patch, create) {
+  if (DEMO) {
+    jobs[jobId].scanVisitors = jobs[jobId].scanVisitors || {};
+    const existingKey = Object.keys(jobs[jobId].scanVisitors).find(key => jobs[jobId].scanVisitors[key].visitorId === visitorId);
+    if (existingKey) jobs[jobId].scanVisitors[existingKey] = {...jobs[jobId].scanVisitors[existingKey], ...patch};
+    else jobs[jobId].scanVisitors['s' + Math.random().toString(36).slice(2,9)] = {...create, ...patch};
+    return;
+  }
+  const ref = db.ref('jobs/' + jobId + '/scanVisitors');
+  ref.orderByChild('visitorId').equalTo(visitorId).once('value').then(snapshot => {
+    const values = snapshot.val() || {};
+    const key = Object.keys(values)[0];
+    if (key) ref.child(key).update(patch);
+    else ref.push({...create, ...patch});
+  });
+}
+function recordQrScan(jobId) {
+  const visitorId = getVisitorId();
+  const writeKey = jobId + ':' + visitorId;
+  if (scanWriteInFlight[writeKey]) return;
+  scanWriteInFlight[writeKey] = true;
+  const now = Date.now();
+  const registered = preRegisteredForJobId === jobId && !!portalVolunteerId;
+  const base = {visitorId, deviceId:getDeviceId(), registered, firstSeenAt:now, lastSeenAt:now, scanCount:1, checkinId:null, status:'new'};
+  if (DEMO) {
+    const scans = jobs[jobId].scanVisitors || {};
+    const key = Object.keys(scans).find(k => scans[k].visitorId === visitorId);
+    if (key && now - (scans[key].lastSeenAt || 0) < 30 * 60 * 1000) {
+      scans[key] = {...scans[key], lastSeenAt:now, scanCount:(scans[key].scanCount || 0) + 1, registered};
+    } else if (!key) {
+      scans['s' + Math.random().toString(36).slice(2,9)] = base;
+    } else {
+      scans[key] = {...scans[key], lastSeenAt:now, scanCount:(scans[key].scanCount || 0) + 1, registered};
+    }
+    jobs[jobId].scanVisitors = scans;
+    scanWriteInFlight[writeKey] = false;
+    return;
+  }
+  const ref = db.ref('jobs/' + jobId + '/scanVisitors');
+  ref.orderByChild('visitorId').equalTo(visitorId).once('value').then(snapshot => {
+    const values = snapshot.val() || {}, key = Object.keys(values)[0];
+    if (key && now - (values[key].lastSeenAt || 0) < 30 * 60 * 1000) {
+      ref.child(key).update({lastSeenAt:now, scanCount:(values[key].scanCount || 0) + 1, registered});
+    } else if (key) {
+      ref.child(key).update({lastSeenAt:now, scanCount:(values[key].scanCount || 0) + 1, registered});
+    } else ref.push(base);
+  }).finally(() => { scanWriteInFlight[writeKey] = false; });
+}
+function enrichQrScan(jobId, checkinId) {
+  const visitorId = getVisitorId();
+  const patch = {visitorId, registered:!!portalVolunteerId, firstName:volunteerFirstName, lastName:volunteerLastName,
+    name:volunteerName, phone:volunteerPhone, email:volunteerEmail, checkinId:checkinId || null, lastSeenAt:Date.now()};
+  updateScanRecord(jobId, visitorId, patch, patch);
 }
 function newId() { return DEMO ? 'j' + Math.random().toString(36).slice(2, 9) : db.ref('jobs').push().key; }
 function deleteJob(id) { if (DEMO) { delete jobs[id]; render(); } else db.ref('jobs/' + id).remove(); }
@@ -1236,7 +1296,8 @@ $('photoInput').addEventListener('change', async e => {
       const data = await compress(files[0]);
       const photoId = pushPath(jobId + '/photos', {phase:'proof-in', data, at:Date.now(), by:name, lat:gps.lat, lng:gps.lng, deviceId:myDeviceId});
       const overrideBy = pendingCheckin.manualOverrideBy || null;
-      pushPath(jobId + '/checkins', {name, phone, email, instagram, emergencyName:pendingCheckin.emergencyName, emergencyPhone:pendingCheckin.emergencyPhone, deviceId:myDeviceId, inAt:Date.now(), inLat:gps.lat, inLng:gps.lng, inAcc:gps.acc, inPhotoId:photoId, outAt:null, verified:false, rewardReleased:false, portalVolunteerId: overrideBy ? null : (portalVolunteerId || null), overrideBy});
+      const checkinId = pushPath(jobId + '/checkins', {name, phone, email, instagram, emergencyName:pendingCheckin.emergencyName, emergencyPhone:pendingCheckin.emergencyPhone, deviceId:myDeviceId, inAt:Date.now(), inLat:gps.lat, inLng:gps.lng, inAcc:gps.acc, inPhotoId:photoId, outAt:null, verified:false, rewardReleased:false, portalVolunteerId: overrideBy ? null : (portalVolunteerId || null), overrideBy});
+      enrichQrScan(jobId, checkinId);
       if (overrideBy) pushPath(jobId + '/activityLog', {action:'manual_override_checkin', by: overrideBy + ' — checked in ' + name + ' manually', at: Date.now()});
       const jName = (jobs[jobId] && jobs[jobId].name) || 'this project';
       const jCause = (jobs[jobId] && jobs[jobId].cause) || jName;
@@ -1869,6 +1930,7 @@ function renderQR(app, id) {
     ${isAdmin ? `<div style="height:10px" class="no-print"></div>
     <button class="btn btn-ghost no-print" onclick="go('edit/${id}')">Edit Job</button>` : ''}
     <div class="no-print">${renderFeed(j, id, {operator:true})}</div>
+    ${scanVisitorSection(j, id)}
     <div class="no-print">${gallerySection()}</div>
     <div class="no-print">${rosterSection(j, id, {canVerify:isAdmin, canRelease:isAdmin, canExport:isAdmin, canDeleteCheckin:isAdmin})}</div>
     ${isAdmin ? `<div class="no-print">${activityLogSection(j, id)}</div>` : ''}
@@ -1957,6 +2019,30 @@ function activityLogSection(j, id) {
       <span class="muted" style="display:block;font-size:.62rem;margin-top:2px">${fmtDate(e.at)} at ${fmtTime(e.at)}</span>
     </div>`).join('') : '<div class="muted" style="font-size:.8rem">No activity logged yet.</div>'}
   </div>`;
+}
+
+function updateScanVisitor(jobId, visitorKey, status) {
+  updatePath(jobId + '/scanVisitors/' + visitorKey + '/status', status);
+  toast('Visitor updated');
+}
+function deleteScanVisitor(jobId, visitorKey) {
+  requestDelete('scanVisitor', jobId + '::' + visitorKey, 'QR visitor', () => {
+    if (DEMO) { delete jobs[jobId].scanVisitors[visitorKey]; render(); }
+    else db.ref('jobs/' + jobId + '/scanVisitors/' + visitorKey).remove();
+  }, {confirmMsg:'Delete this QR visitor? You have 15 seconds to undo it.', undoText:'QR visitor deleted'});
+}
+function scanVisitorSection(j, id) {
+  if (!isAdmin) return '';
+  const scans = Object.entries(j.scanVisitors || {}).sort((a,b) => (b[1].lastSeenAt || 0) - (a[1].lastSeenAt || 0));
+  const scanRows = scans.length ? scans.map(([visitorKey, scan]) => `<div class="roster-row">
+      <div class="rr-top"><div><div class="rr-name">${esc(scan.name || 'QR visitor')}</div>
+        <div class="rr-time">${scan.registered ? 'Registered' : 'Not registered'} · ${scan.scanCount || 1} scan${(scan.scanCount || 1) === 1 ? '' : 's'} · last seen ${fmtTime(scan.lastSeenAt)}</div>
+        ${scan.email ? `<div class="rr-time">${esc(scan.email)}${scan.phone ? ' · '+esc(scan.phone) : ''}</div>` : ''}
+      </div><div style="display:flex;align-items:center;gap:6px"><span class="badge ${scan.registered ? 'badge-verified' : 'badge-unverified'}">${scan.registered ? 'Registered' : 'Unregistered'}</span><button class="photo-del" style="position:static" aria-label="Delete QR visitor" onclick="deleteScanVisitor('${id}','${visitorKey}')">✕</button></div></div>
+      <div class="rr-time">${scan.checkinId ? 'Check-in recorded' : 'New visitor'} · ${scan.status === 'complete' ? 'Complete' : 'Needs follow-up'}</div>
+      ${!scan.registered && !scan.checkinId ? `<button class="toggle-btn" style="margin-top:8px" onclick="updateScanVisitor('${id}','${visitorKey}','complete')">Mark Complete</button>` : ''}
+    </div>`).join('') : '<div class="muted" style="font-size:.8rem">No QR scans recorded yet.</div>';
+  return `<div class="card"><h2>New QR Visitors</h2><div class="legend-box"><b>${scans.length} unique visitor${scans.length === 1 ? '' : 's'}</b>Repeated scans from the same device are grouped for 30 minutes. Scanning does not count as check-in.</div>${scanRows}</div>`;
 }
 
 function firstNameOf(name) { return (name||'').trim().split(/\s+/)[0] || name; }
@@ -2099,6 +2185,7 @@ function switchFeedPhase(phase) { feedPhase = phase; render(); }
 function renderJob(app, id) {
   const j = jobs[id];
   if (!j) { app.innerHTML = '<div class="card" style="margin-top:20px">Job not found.</div>'; return; }
+  recordQrScan(id);
   const stage = jobStage(j);
   if (stage === 'awaiting_cause') {
     $('hdrSub').textContent = 'Not open yet';
