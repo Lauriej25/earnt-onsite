@@ -561,9 +561,13 @@ function updateScanRecord(jobId, visitorId, patch, create) {
 function recordQrScan(jobId) {
   const visitorId = getVisitorId();
   const writeKey = jobId + ':' + visitorId;
+  const scanCacheKey = 'earnt_scan_' + jobId;
+  const lastLocalScan = Number(localStorage.getItem(scanCacheKey) || 0);
+  if (Date.now() - lastLocalScan < 30 * 60 * 1000) return;
   if (scanWriteInFlight[writeKey]) return;
   scanWriteInFlight[writeKey] = true;
   const now = Date.now();
+  localStorage.setItem(scanCacheKey, String(now));
   const registered = preRegisteredForJobId === jobId && !!portalVolunteerId;
   const base = {visitorId, deviceId:getDeviceId(), registered, firstSeenAt:now, lastSeenAt:now, scanCount:1, checkinId:null, status:'new'};
   if (DEMO) {
@@ -1908,7 +1912,7 @@ function renderQR(app, id) {
       <h1>${esc(j.name)}</h1>
       <div class="qr-sub">${esc(j.brandName||'')}${j.brandName && j.cause ? ' × ' : ''}${esc(j.cause||'')}${j.date ? ' · '+esc(dateTimeText(j)) : ''}</div>
       <div class="qr-box" id="qrcanvas"></div>
-      <div class="qr-instruction">Scan to check in</div>
+      <div class="qr-instruction">Scan to join or check in</div>
       <div class="qr-footer">${esc(j.address||'')}</div>
       ${j.directions ? `<div class="qr-footer" style="margin-top:4px;text-transform:none;letter-spacing:0">${esc(j.directions)}</div>` : ''}
     </div>
@@ -2188,6 +2192,7 @@ function renderJob(app, id) {
   const j = jobs[id];
   if (!j) { app.innerHTML = '<div class="card" style="margin-top:20px">Job not found.</div>'; return; }
   recordQrScan(id);
+  if (volunteerName && volunteerPhone && volunteerEmail) enrichQrScan(id, null);
   const stage = jobStage(j);
   if (stage === 'awaiting_cause') {
     $('hdrSub').textContent = 'Not open yet';
@@ -2358,6 +2363,7 @@ async function beginCheckIn(jobId) {
     if (!em) return toast('Enter your email too — it\u2019s a double-check before your ETY is released');
     if (!isValidEmail(em)) return toast('That doesn\u2019t look like a valid email address');
     setVolunteerName(firstName, lastName); setVolunteerPhone(p); setVolunteerEmail(em); setVolunteerInstagram(ig); setVolunteerEmergency(emergencyName, emergencyPhone);
+    enrichQrScan(jobId, null);
     volunteerNameBackup = null; volunteerFirstNameBackup = null; volunteerLastNameBackup = null; volunteerPhoneBackup = null; volunteerEmailBackup = null; volunteerInstagramBackup = null; volunteerEmergencyNameBackup = null; volunteerEmergencyPhoneBackup = null;
   }
   const btn = $('ciBtn'); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Getting location…';
@@ -2477,13 +2483,6 @@ function renderReport(app, id) {
       <div class="card" style="margin:0"><div class="mono muted" style="font-size:.56rem;letter-spacing:.12em;text-transform:uppercase">On site</div><div class="mono" style="font-size:.9rem;margin-top:4px">${firstIn?fmtTime(firstIn)+(lastOut?' – '+fmtTime(lastOut):''):'—'}</div></div>
       <div class="card" style="margin:0"><div class="mono muted" style="font-size:.56rem;letter-spacing:.12em;text-transform:uppercase">Volunteer hours</div><div class="mono" style="font-size:.9rem;margin-top:4px">${totalMs?fmtDur(totalMs):'—'}</div></div>
     </div>
-    ${jobStage(j)!=='awaiting_cause' ? `<div class="card" style="text-align:center">
-      <h2 style="margin-bottom:8px">Check-In QR</h2>
-      <div class="qr-box" id="reportQrCanvas" style="margin:0 auto"></div>
-      <div class="btn-row" style="margin-top:12px">
-        <button class="btn btn-sm btn-ghost" style="flex:1" onclick="copyLink('${checkinUrl(id).replace(/'/g,"\\'")}')">Copy Check-in Link</button>
-      </div>
-    </div>` : ''}
     ${j.lat!=null ? `<div class="card"><div class="mono muted" style="font-size:.56rem;letter-spacing:.12em;text-transform:uppercase">Location</div>
       <div class="mono" style="font-size:.8rem;margin-top:4px">${esc(j.address||'')} <a href="${mapsLink(j.lat,j.lng)}" target="_blank" style="color:inherit">View map ↗</a></div>
       ${viewMapHTML('reportViewMap', j.lat, j.lng)}</div>` : ''}
@@ -2494,10 +2493,6 @@ function renderReport(app, id) {
     ${isAdmin ? activityLogSection(j, id) : ''}
     <div class="footer-mark">Verified by EARNT · Actions speak louder than money</div>${legalLinksHTML()}`;
   initViewMap('reportViewMap', j.lat, j.lng);
-  if (jobStage(j) !== 'awaiting_cause') {
-    const box = document.getElementById('reportQrCanvas');
-    if (box) { box.innerHTML = ''; new QRCode(box, {text: checkinUrl(id), width: 170, height: 170, colorDark:'#0B0B0A', colorLight:'#FFFFFF', correctLevel: QRCode.CorrectLevel.H}); }
-  }
 }
 
 /* ---------- boot ---------- */
